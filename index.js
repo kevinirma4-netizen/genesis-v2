@@ -3070,7 +3070,7 @@ client.on(
                         TRYOUT_PING_ROLE_ID
                     ) {
                         payload.content =
-                            `<@&${TRYOUT_PING_ROLE_ID}`;
+                            `<@&${TRYOUT_PING_ROLE_ID>}`;
 
                         payload.allowedMentions =
                             {
