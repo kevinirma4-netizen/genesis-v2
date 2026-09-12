@@ -49,7 +49,7 @@ const GUILD_ID =
         );
 
 /* =========================================================
-   VALIDATION
+   CHECK
 ========================================================= */
 
 if (
@@ -83,7 +83,7 @@ if (
 }
 
 /* =========================================================
-   COMMANDS
+   TRYOUT COMMAND
 ========================================================= */
 
 const tryoutCommand =
@@ -96,12 +96,12 @@ const tryoutCommand =
         )
 
         /* ================================================
-           /tryout create
+           CREATE
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'create'
                     )
@@ -111,12 +111,12 @@ const tryoutCommand =
         )
 
         /* ================================================
-           /tryout close
+           CLOSE
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'close'
                     )
@@ -126,12 +126,12 @@ const tryoutCommand =
         )
 
         /* ================================================
-           /tryout results
+           RESULTS
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'results'
                     )
@@ -141,12 +141,12 @@ const tryoutCommand =
         )
 
         /* ================================================
-           /tryout leaderboard
+           LEADERBOARD
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'leaderboard'
                     )
@@ -156,12 +156,12 @@ const tryoutCommand =
         )
 
         /* ================================================
-           /tryout profile
+           PROFILE
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'profile'
                     )
@@ -184,12 +184,12 @@ const tryoutCommand =
         )
 
         /* ================================================
-           /tryout announce
+           ANNOUNCE
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'announce'
                     )
@@ -203,7 +203,7 @@ const tryoutCommand =
                                     'unit'
                                 )
                                 .setDescription(
-                                    'Timer unit'
+                                    'Minutes or hours'
                                 )
                                 .setRequired(
                                     true
@@ -230,7 +230,7 @@ const tryoutCommand =
                                     'amount'
                                 )
                                 .setDescription(
-                                    'Timer amount'
+                                    'How long until the tryout'
                                 )
                                 .setRequired(
                                     true
@@ -238,26 +238,29 @@ const tryoutCommand =
                                 .setMinValue(
                                     1
                                 )
+                                .setMaxValue(
+                                    240
+                                )
                     )
         )
 
         /* ================================================
-           /tryout scrim
+           SCRIM
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'scrim'
                     )
                     .setDescription(
-                        'Create a scrim'
+                        'Create an AUREON Friendly or ELO scrim'
                     )
         );
 
 /* =========================================================
-   /scrim
+   SCRIM COMMAND
 ========================================================= */
 
 const scrimCommand =
@@ -274,8 +277,8 @@ const scrimCommand =
         ================================================ */
 
         .addSubcommand(
-            sub =>
-                sub
+            subcommand =>
+                subcommand
                     .setName(
                         'close'
                     )
@@ -285,12 +288,12 @@ const scrimCommand =
         );
 
 /* =========================================================
-   FINAL COMMAND LIST
+   COMMAND DATA
 ========================================================= */
 
 const commands = [
-    tryoutCommand,
-    scrimCommand
+    tryoutCommand.toJSON(),
+    scrimCommand.toJSON()
 ];
 
 /* =========================================================
@@ -306,18 +309,21 @@ const rest =
     );
 
 /* =========================================================
-   DEPLOY
+   REGISTER
 ========================================================= */
 
 (async () => {
     try {
         console.log('');
+
         console.log(
             '======================================'
         );
+
         console.log(
             '⏳ Registering AUREON commands...'
         );
+
         console.log(
             '======================================'
         );
@@ -331,6 +337,7 @@ const rest =
         );
 
         console.log('');
+
         console.log(
             '⚡ Commands being registered:'
         );
@@ -379,20 +386,22 @@ const rest =
 
         console.log('');
 
-        const data =
-            await rest.put(
-                Routes.applicationGuildCommands(
-                    CLIENT_ID,
-                    GUILD_ID
-                ),
-                {
-                    body:
-                        commands.map(
-                            command =>
-                                command.toJSON()
-                        )
-                }
-            );
+        console.log(
+            `📦 Total top-level commands: ${commands.length}`
+        );
+
+        console.log('');
+
+        await rest.put(
+            Routes.applicationGuildCommands(
+                CLIENT_ID,
+                GUILD_ID
+            ),
+            {
+                body:
+                    commands
+            }
+        );
 
         console.log(
             '======================================'
@@ -447,24 +456,24 @@ const rest =
         console.log('');
 
         console.log(
-            `✅ ${data.length} top-level commands registered.`
-        );
-
-        console.log(
             '✅ /scrim close IS NOW REGISTERED.'
         );
 
         console.log('');
+
     } catch (
         error
     ) {
         console.error('');
+
         console.error(
             '======================================'
         );
+
         console.error(
-            '❌ AUREON COMMAND DEPLOY FAILED'
+            '❌ FAILED TO REGISTER AUREON COMMANDS'
         );
+
         console.error(
             '======================================'
         );
@@ -491,6 +500,10 @@ const rest =
         );
 
         console.error('');
+
+        console.error(
+            error
+        );
 
         process.exit(1);
     }
