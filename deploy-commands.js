@@ -7,178 +7,276 @@ const {
 } = require('discord.js');
 
 /* =========================================================
-   AUREON • COMMAND REGISTRATION
+   ENV
 ========================================================= */
 
 const TOKEN =
-    process.env.TOKEN ||
-    process.env.DISCORD_TOKEN;
+    String(
+        process.env.TOKEN ||
+        process.env.DISCORD_TOKEN ||
+        ''
+    )
+        .trim()
+        .replace(
+            /^["']|["']$/g,
+            ''
+        )
+        .replace(
+            /^Bot\s+/i,
+            ''
+        );
 
 const CLIENT_ID =
-    process.env.CLIENT_ID ||
-    process.env.DISCORD_CLIENT_ID ||
-    '1547928788229423104';
+    String(
+        process.env.CLIENT_ID ||
+        ''
+    )
+        .trim()
+        .replace(
+            /^["']|["']$/g,
+            ''
+        );
 
 const GUILD_ID =
-    process.env.GUILD_ID ||
-    process.env.DISCORD_GUILD_ID ||
-    '1546549175292919928';
+    String(
+        process.env.GUILD_ID ||
+        ''
+    )
+        .trim()
+        .replace(
+            /^["']|["']$/g,
+            ''
+        );
 
-if (!TOKEN) {
+/* =========================================================
+   TOKEN / CLIENT CHECK
+========================================================= */
+
+if (
+    !TOKEN
+) {
     console.error(
-        '❌ TOKEN is missing from Environment Variables.'
+        '❌ TOKEN is missing from .env / Environment Variables.'
+    );
+
+    process.exit(1);
+}
+
+if (
+    !CLIENT_ID
+) {
+    console.error(
+        '❌ CLIENT_ID is missing from .env / Environment Variables.'
     );
 
     process.exit(1);
 }
 
 /* =========================================================
-   TRYOUT COMMAND
+   COMMANDS
 ========================================================= */
 
-const tryoutCommand =
+const commands = [
+
+    /* =====================================================
+       /tryout
+    ===================================================== */
+
     new SlashCommandBuilder()
-        .setName('tryout')
+        .setName(
+            'tryout'
+        )
         .setDescription(
-            'AUREON Tryout Hub'
+            'AUREON tryout commands'
         )
 
-        /* =================================================
-           CREATE
-        ================================================= */
+        /* -------------------------------------------------
+           /tryout create
+        ------------------------------------------------- */
 
         .addSubcommand(
-            subcommand =>
-                subcommand
-                    .setName('create')
+            sub =>
+                sub
+                    .setName(
+                        'create'
+                    )
                     .setDescription(
-                        'Create a new tryout lobby'
+                        'Create a tryout lobby'
                     )
         )
 
-        /* =================================================
-           CLOSE
-        ================================================= */
+        /* -------------------------------------------------
+           /tryout close
+        ------------------------------------------------- */
 
         .addSubcommand(
-            subcommand =>
-                subcommand
-                    .setName('close')
+            sub =>
+                sub
+                    .setName(
+                        'close'
+                    )
                     .setDescription(
-                        'Close the active tryout lobby'
+                        'Close your active tryout lobby'
                     )
         )
 
-        /* =================================================
-           RESULTS
-        ================================================= */
+        /* -------------------------------------------------
+           /tryout scrim
+        ------------------------------------------------- */
 
         .addSubcommand(
-            subcommand =>
-                subcommand
-                    .setName('results')
+            sub =>
+                sub
+                    .setName(
+                        'scrim'
+                    )
                     .setDescription(
-                        'Create tryout results for a player'
+                        'Create a scrim'
                     )
         )
 
-        /* =================================================
-           LEADERBOARD
-        ================================================= */
+        /* -------------------------------------------------
+           /tryout results
+        ------------------------------------------------- */
 
         .addSubcommand(
-            subcommand =>
-                subcommand
-                    .setName('leaderboard')
+            sub =>
+                sub
+                    .setName(
+                        'results'
+                    )
                     .setDescription(
-                        'Show the top 10 AUREON players by OVR'
+                        'Enter player results'
                     )
         )
 
-        /* =================================================
-           PROFILE
-        ================================================= */
+        /* -------------------------------------------------
+           /tryout leaderboard
+        ------------------------------------------------- */
 
         .addSubcommand(
-            subcommand =>
-                subcommand
-                    .setName('profile')
+            sub =>
+                sub
+                    .setName(
+                        'leaderboard'
+                    )
                     .setDescription(
-                        'Show a player\'s AUREON profile'
+                        'View the AUREON leaderboard'
+                    )
+        )
+
+        /* -------------------------------------------------
+           /tryout profile
+        ------------------------------------------------- */
+
+        .addSubcommand(
+            sub =>
+                sub
+                    .setName(
+                        'profile'
+                    )
+                    .setDescription(
+                        'View a player profile'
                     )
                     .addUserOption(
                         option =>
                             option
-                                .setName('player')
-                                .setDescription(
-                                    'The player to view'
+                                .setName(
+                                    'player'
                                 )
-                                .setRequired(true)
+                                .setDescription(
+                                    'Player to view'
+                                )
+                                .setRequired(
+                                    true
+                                )
                     )
         )
 
-        /* =================================================
-           ANNOUNCE
-        ================================================= */
+        /* -------------------------------------------------
+           /tryout announce
+        ------------------------------------------------- */
 
         .addSubcommand(
-            subcommand =>
-                subcommand
-                    .setName('announce')
+            sub =>
+                sub
+                    .setName(
+                        'announce'
+                    )
                     .setDescription(
-                        'Announce an upcoming AUREON tryout'
+                        'Create a tryout announcement'
                     )
                     .addStringOption(
                         option =>
                             option
-                                .setName('unit')
-                                .setDescription(
-                                    'Minutes or hours'
+                                .setName(
+                                    'unit'
                                 )
-                                .setRequired(true)
+                                .setDescription(
+                                    'Timer unit'
+                                )
+                                .setRequired(
+                                    true
+                                )
                                 .addChoices(
                                     {
-                                        name: 'Minutes',
-                                        value: 'minutes'
+                                        name:
+                                            'Minutes',
+                                        value:
+                                            'minutes'
                                     },
                                     {
-                                        name: 'Hours',
-                                        value: 'hours'
+                                        name:
+                                            'Hours',
+                                        value:
+                                            'hours'
                                     }
                                 )
                     )
                     .addIntegerOption(
                         option =>
                             option
-                                .setName('amount')
-                                .setDescription(
-                                    'How long until the tryout'
+                                .setName(
+                                    'amount'
                                 )
-                                .setRequired(true)
-                                .setMinValue(1)
-                                .setMaxValue(240)
+                                .setDescription(
+                                    'Timer amount'
+                                )
+                                .setRequired(
+                                    true
+                                )
+                                .setMinValue(
+                                    1
+                                )
                     )
+        ),
+
+    /* =====================================================
+       /scrim
+    ===================================================== */
+
+    new SlashCommandBuilder()
+        .setName(
+            'scrim'
+        )
+        .setDescription(
+            'AUREON scrim commands'
         )
 
-        /* =================================================
-           SCRIM
-        ================================================= */
+        /* -------------------------------------------------
+           /scrim close
+        ------------------------------------------------- */
 
         .addSubcommand(
-            subcommand =>
-                subcommand
-                    .setName('scrim')
-                    .setDescription(
-                        'Create an AUREON Friendly or ELO scrim'
+            sub =>
+                sub
+                    .setName(
+                        'close'
                     )
-        );
-
-/* =========================================================
-   COMMAND DATA
-========================================================= */
-
-const commands = [
-    tryoutCommand.toJSON()
+                    .setDescription(
+                        'Close your active scrim'
+                    )
+        )
 ];
 
 /* =========================================================
@@ -187,143 +285,204 @@ const commands = [
 
 const rest =
     new REST({
-        version: '10'
+        version:
+            '10'
     }).setToken(
         TOKEN
     );
 
 /* =========================================================
-   REGISTER
+   DEPLOY
 ========================================================= */
 
 (async () => {
     try {
+        console.log('');
         console.log(
-            '⏳ Registering AUREON commands...'
+            '======================================'
+        );
+        console.log(
+            '🚀 AUREON COMMAND DEPLOY'
+        );
+        console.log(
+            '======================================'
         );
 
         console.log(
-            `🤖 Client ID: ${CLIENT_ID}`
+            `📦 Commands prepared: ${commands.length}`
         );
 
-        console.log(
-            `🏠 Guild ID: ${GUILD_ID}`
+        commands.forEach(
+            command => {
+                console.log(
+                    `   • /${command.name}`
+                );
+            }
         );
 
         console.log('');
         console.log(
-            '⚡ Commands being registered:'
+            '🔄 Sending commands to Discord...'
         );
 
-        for (
-            const command
-            of commands
+        let data;
+
+        /*
+         * GUILD DEPLOY
+         *
+         * Much faster when GUILD_ID exists.
+         */
+        if (
+            GUILD_ID
         ) {
             console.log(
-                `   /${command.name}`
+                `🏠 Deploying to guild: ${GUILD_ID}`
             );
 
-            if (
-                Array.isArray(
-                    command.options
-                )
-            ) {
-                for (
-                    const option
-                    of command.options
-                ) {
-                    console.log(
-                        `      └─ ${option.name}`
-                    );
-                }
-            }
+            data =
+                await rest.put(
+                    Routes.applicationGuildCommands(
+                        CLIENT_ID,
+                        GUILD_ID
+                    ),
+                    {
+                        body:
+                            commands.map(
+                                command =>
+                                    command.toJSON()
+                            )
+                    }
+                );
+
+            console.log('');
+            console.log(
+                `✅ Successfully deployed ${data.length} guild commands.`
+            );
+
+            console.log(
+                '⚡ Guild commands should update almost immediately.'
+            );
+        } else {
+            /*
+             * GLOBAL DEPLOY
+             */
+            console.log(
+                '🌍 No GUILD_ID found → using GLOBAL commands.'
+            );
+
+            data =
+                await rest.put(
+                    Routes.applicationCommands(
+                        CLIENT_ID
+                    ),
+                    {
+                        body:
+                            commands.map(
+                                command =>
+                                    command.toJSON()
+                            )
+                    }
+                );
+
+            console.log('');
+            console.log(
+                `✅ Successfully deployed ${data.length} global commands.`
+            );
+
+            console.log(
+                '⚠️ Global commands can take longer to appear.'
+            );
         }
 
         console.log('');
-
-        await rest.put(
-            Routes.applicationGuildCommands(
-                CLIENT_ID,
-                GUILD_ID
-            ),
-            {
-                body: commands
-            }
-        );
-
         console.log(
             '======================================'
         );
-
         console.log(
-            '✅ AUREON COMMANDS REGISTERED'
+            '✅ DEPLOY FINISHED'
         );
-
         console.log(
             '======================================'
         );
 
         console.log('');
-
         console.log(
-            '⚡ Available commands:'
+            'Available commands:'
         );
 
         console.log(
-            '   /tryout create'
+            '• /tryout create'
         );
 
         console.log(
-            '   /tryout close'
+            '• /tryout close'
         );
 
         console.log(
-            '   /tryout results'
+            '• /tryout scrim'
         );
 
         console.log(
-            '   /tryout leaderboard'
+            '• /tryout results'
         );
 
         console.log(
-            '   /tryout profile'
+            '• /tryout leaderboard'
         );
 
         console.log(
-            '   /tryout announce'
+            '• /tryout profile'
         );
 
         console.log(
-            '   /tryout scrim'
+            '• /tryout announce'
+        );
+
+        console.log(
+            '• /scrim close'
         );
 
         console.log('');
-
-        console.log(
-            '✅ SCRIM SUBCOMMAND IS NOW REGISTERED.'
-        );
-
-    } catch (error) {
+    } catch (
+        error
+    ) {
         console.error('');
-
+        console.error(
+            '======================================'
+        );
+        console.error(
+            '❌ DEPLOY FAILED'
+        );
         console.error(
             '======================================'
         );
 
         console.error(
-            '❌ FAILED TO REGISTER AUREON COMMANDS'
+            `Error code: ${
+                error?.code ??
+                'UNKNOWN'
+            }`
         );
 
         console.error(
-            '======================================'
+            `Error name: ${
+                error?.name ??
+                'UNKNOWN'
+            }`
+        );
+
+        console.error(
+            `Error message: ${
+                error?.message ??
+                'UNKNOWN'
+            }`
         );
 
         console.error('');
-
         console.error(
             error
         );
 
-        console.error('');
+        process.exit(1);
     }
 })();
