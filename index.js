@@ -1,8 +1,6 @@
 require('dotenv').config();
-
 const fs = require('fs');
 const path = require('path');
-
 const {
   Client,
   GatewayIntentBits,
@@ -22,25 +20,16 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* =========================================================
-   CONFIG
-========================================================= */
-
 const TOKEN = String(
-  process.env.TOKEN || process.env.DISCORD_TOKEN || ''
+  process.env.TOKEN ||
+  process.env.DISCORD_TOKEN ||
+  ''
 )
   .trim()
-  .replace(/^["']|["']$/g, '')
+  .replace(/^['"]|['"]$/g, '')
   .replace(/^Bot\s+/i, '');
 
 const MAX_PLAYERS = 10;
-
-const TWO_MINUTES = 2 * 60 * 1000;
-const TIMER_CHECK = 5000;
-
-const SCRIM_SELECTED_PLAYERS = 5;
-const SCRIM_START_DELAY = 2 * 60 * 1000;
-const SCRIM_RANDOM_DELAY = 1500;
 
 const SCRIM_POSITIONS = [
   'CF',
@@ -49,6 +38,12 @@ const SCRIM_POSITIONS = [
   'RW',
   'LW'
 ];
+
+const SCRIM_START_DELAY = 2 * 60 * 1000;
+const SCRIM_RANDOM_DELAY = 1500;
+
+const BUILD_VERSION =
+  'AUREON-RESULTS-ROLE-SPLIT-V4';
 
 const GOLD = 0xD9B45C;
 const GREEN = 0x5BC47B;
@@ -59,114 +54,147 @@ const DEFAULT_BANNER_URL =
   'https://i.ibb.co/v6LyGZj4/bannrerrer.jpg';
 
 /* =========================================================
-   ENV HELPERS
+   ENV
 ========================================================= */
 
-function cleanEnvString(value) {
-  return String(value || '')
+const clean = value =>
+  String(value || '')
     .trim()
-    .replace(/^["']|["']$/g, '');
-}
+    .replace(/^['"]|['"]$/g, '');
 
-function cleanRole(value) {
-  const id = cleanEnvString(value);
-  return /^\d{17,20}$/.test(id) ? id : '';
-}
+const roleId = value => {
+  const id = clean(value);
 
-function isUsableBannerUrl(url) {
-  try {
-    const parsed = new URL(url);
+  return /^\d{17,20}$/.test(id)
+    ? id
+    : '';
+};
 
-    if (!/^https?:$/i.test(parsed.protocol)) {
-      return false;
-    }
+const bannerEnv =
+  clean(process.env.BANNER_URL);
 
-    if (/^(www\.)?ibb\.co$/i.test(parsed.hostname)) {
-      return false;
-    }
+let BANNER_URL =
+  DEFAULT_BANNER_URL;
 
-    return true;
-  } catch {
-    return false;
+try {
+  const url =
+    new URL(bannerEnv);
+
+  if (
+    /^https?:$/i.test(
+      url.protocol
+    ) &&
+    !/^(www\.)?ibb\.co$/i.test(
+      url.hostname
+    )
+  ) {
+    BANNER_URL =
+      bannerEnv;
   }
-}
+} catch {}
 
-const configuredBanner = cleanEnvString(
-  process.env.BANNER_URL
-);
+const TRYOUT_HOSTER_ROLE_ID =
+  roleId(
+    process.env.TRYOUT_HOSTER_ROLE_ID
+  );
 
-const BANNER_URL =
-  isUsableBannerUrl(configuredBanner)
-    ? configuredBanner
-    : DEFAULT_BANNER_URL;
+const TRYOUT_PING_ROLE_ID =
+  roleId(
+    process.env.TRYOUT_PING_ROLE_ID
+  );
 
-const TRYOUT_HOSTER_ROLE_ID = cleanRole(
-  process.env.TRYOUT_HOSTER_ROLE_ID
-);
+const MAIN_TEAM_ROLE_ID =
+  roleId(
+    process.env.MAIN_TEAM_ROLE_ID
+  );
 
-const TRYOUT_PING_ROLE_ID = cleanRole(
-  process.env.TRYOUT_PING_ROLE_ID
-);
+const FRIENDLY_SCRIM_PING_ROLE_ID =
+  roleId(
+    process.env.FRIENDLY_SCRIM_PING_ROLE_ID
+  );
 
-const MAIN_TEAM_ROLE_ID = cleanRole(
-  process.env.MAIN_TEAM_ROLE_ID
-);
-
-const FRIENDLY_SCRIM_PING_ROLE_ID = cleanRole(
-  process.env.FRIENDLY_SCRIM_PING_ROLE_ID
-);
-
-const ELO_SCRIM_PING_ROLE_ID = cleanRole(
-  process.env.ELO_SCRIM_PING_ROLE_ID
-);
+const ELO_SCRIM_PING_ROLE_ID =
+  roleId(
+    process.env.ELO_SCRIM_PING_ROLE_ID
+  );
 
 const RANK_ROLE_IDS = {
-  F: cleanRole(process.env.AURE_RANK_F_ROLE_ID),
-  C: cleanRole(process.env.AURE_RANK_C_ROLE_ID),
-  B: cleanRole(process.env.AURE_RANK_B_ROLE_ID),
-  A: cleanRole(process.env.AURE_RANK_A_ROLE_ID),
-  S: cleanRole(process.env.AURE_RANK_S_ROLE_ID)
+  F: roleId(
+    process.env.AURE_RANK_F_ROLE_ID
+  ),
+
+  C: roleId(
+    process.env.AURE_RANK_C_ROLE_ID
+  ),
+
+  B: roleId(
+    process.env.AURE_RANK_B_ROLE_ID
+  ),
+
+  A: roleId(
+    process.env.AURE_RANK_A_ROLE_ID
+  ),
+
+  S: roleId(
+    process.env.AURE_RANK_S_ROLE_ID
+  )
 };
 
 /* =========================================================
    STORAGE
 ========================================================= */
 
-const tryouts = new Map();
-const scrims = new Map();
-const announcements = new Map();
-const drafts = new Map();
-const pendingAnnouncements = new Map();
+const tryouts =
+  new Map();
 
-const DATA_DIR = path.join(__dirname, 'data');
-const RESULTS_FILE = path.join(
-  DATA_DIR,
-  'player-results.json'
-);
+const scrims =
+  new Map();
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, {
-    recursive: true
-  });
+const announcements =
+  new Map();
+
+const drafts =
+  new Map();
+
+const pendingAnnouncements =
+  new Map();
+
+const DATA_DIR =
+  path.join(
+    __dirname,
+    'data'
+  );
+
+const RESULTS_FILE =
+  path.join(
+    DATA_DIR,
+    'player-results.json'
+  );
+
+if (
+  !fs.existsSync(
+    DATA_DIR
+  )
+) {
+  fs.mkdirSync(
+    DATA_DIR,
+    {
+      recursive: true
+    }
+  );
 }
 
 let resultsDatabase = {};
 
 try {
-  if (fs.existsSync(RESULTS_FILE)) {
-    resultsDatabase = JSON.parse(
+  resultsDatabase =
+    JSON.parse(
       fs.readFileSync(
         RESULTS_FILE,
         'utf8'
       ) || '{}'
     );
-  }
-} catch (error) {
-  console.error(
-    '❌ Could not read results database:',
-    error.message
-  );
-
+} catch {
   resultsDatabase = {};
 }
 
@@ -190,7 +218,7 @@ function saveResults() {
 }
 
 /* =========================================================
-   BASIC HELPERS
+   HELPERS
 ========================================================= */
 
 function mentionUser(id) {
@@ -201,11 +229,14 @@ function mentionRole(id) {
   return `<@&${id}>`;
 }
 
-function hasRole(member, roleId) {
+function hasRole(
+  member,
+  id
+) {
   return Boolean(
     member &&
-    roleId &&
-    member.roles?.cache?.has(roleId)
+    id &&
+    member.roles?.cache?.has(id)
   );
 }
 
@@ -224,36 +255,41 @@ function isMainTeam(member) {
 }
 
 function fmt(ms) {
-  const seconds = Math.max(
-    0,
-    Math.ceil(ms / 1000)
-  );
+  const seconds =
+    Math.max(
+      0,
+      Math.ceil(
+        ms / 1000
+      )
+    );
 
-  const minutes = Math.floor(
-    seconds / 60
-  );
+  const minutes =
+    Math.floor(
+      seconds / 60
+    );
 
   const remaining =
     seconds % 60;
 
   return (
-    String(minutes).padStart(2, '0') +
-    ':' +
-    String(remaining).padStart(2, '0')
+    `${String(minutes).padStart(2, '0')}:` +
+    `${String(remaining).padStart(2, '0')}`
   );
 }
 
 function shuffle(array) {
-  const copy = [...array];
+  const copy =
+    [...array];
 
   for (
     let i = copy.length - 1;
     i > 0;
     i--
   ) {
-    const j = Math.floor(
-      Math.random() * (i + 1)
-    );
+    const j =
+      Math.floor(
+        Math.random() * (i + 1)
+      );
 
     [
       copy[i],
@@ -267,18 +303,21 @@ function shuffle(array) {
   return copy;
 }
 
-/* =========================================================
-   RANK / RESULTS
-========================================================= */
-
 function getRank(overall) {
   const value =
     Number(overall) || 0;
 
-  if (value >= 90) return 'S';
-  if (value >= 80) return 'A';
-  if (value >= 70) return 'B';
-  if (value >= 60) return 'C';
+  if (value >= 90)
+    return 'S';
+
+  if (value >= 80)
+    return 'A';
+
+  if (value >= 70)
+    return 'B';
+
+  if (value >= 60)
+    return 'C';
 
   return 'F';
 }
@@ -293,50 +332,16 @@ function rankText(rank) {
   }[rank] || rank;
 }
 
-function roleForRank(rank) {
-  return RANK_ROLE_IDS[rank] || '';
-}
-
-/*
-   GK LOGIC:
-
-   GK blank/null = GK is OUT and DOES NOT count
-   GK 0-100       = GK is IN and DOES count
-
-   OVR:
-   no GK -> Shooting + Passing + Teamwork + Defending / 4
-   with GK -> Shooting + Passing + Teamwork + Defending + GK / 5
-*/
-
-function calculateOverall(
-  shooting,
-  passing,
-  teamwork,
-  defending,
-  gk
-) {
-  const values = [
-    Number(shooting),
-    Number(passing),
-    Number(teamwork),
-    Number(defending)
-  ];
-
-  if (
-    gk !== null &&
-    gk !== undefined &&
-    gk !== ''
-  ) {
-    values.push(Number(gk));
-  }
-
-  return Math.round(
-    values.reduce(
-      (sum, value) => sum + value,
-      0
-    ) / values.length
+function rankRole(rank) {
+  return (
+    RANK_ROLE_IDS[rank] ||
+    ''
   );
 }
+
+/* =========================================================
+   PLAYER DATABASE
+========================================================= */
 
 function normalizePlayerData(data) {
   if (
@@ -346,109 +351,153 @@ function normalizePlayerData(data) {
     return null;
   }
 
+  const type =
+    data.type === 'gk'
+      ? 'gk'
+      : 'striker';
+
   const history =
-    Array.isArray(data.history)
+    Array.isArray(
+      data.history
+    )
       ? data.history
       : [];
 
-  const rawGk = data.gk;
-
-  const gk =
-    rawGk === '' ||
-    rawGk === null ||
-    rawGk === undefined
-      ? null
-      : Number(rawGk);
-
-  const overall =
-    Number(data.overall) || 0;
-
-  const bestHistory =
-    history.reduce(
-      (best, item) =>
-        Math.max(
-          best,
-          Number(item?.overall) || 0
-        ),
-      0
-    );
-
-  /*
-     Old databases may not have Defending.
-     We keep them compatible by using 0.
-  */
-
   return {
+    type,
+
+    position:
+      data.position ||
+      (
+        type === 'gk'
+          ? 'GK'
+          : 'CF'
+      ),
+
     shooting:
-      Number(data.shooting) || 0,
+      Number(data.shooting) ||
+      0,
 
     passing:
-      Number(data.passing) || 0,
+      Number(data.passing) ||
+      0,
 
     teamwork:
-      Number(data.teamwork) || 0,
+      Number(data.teamwork) ||
+      0,
 
     defending:
-      Number(data.defending) || 0,
+      Number(data.defending) ||
+      0,
 
-    gk:
-      Number.isFinite(gk)
-        ? gk
-        : null,
+    goalkeeping:
+      Number(data.goalkeeping) ||
+      0,
 
-    overall,
+    reactionTime:
+      Number(data.reactionTime) ||
+      0,
+
+    overall:
+      Number(data.overall) ||
+      0,
 
     rank:
       data.rank ||
-      getRank(overall),
+      getRank(
+        data.overall
+      ),
 
     thingsToFix:
       String(
-        data.thingsToFix || ''
+        data.thingsToFix ||
+        ''
       ),
 
     updatedAt:
-      data.updatedAt || null,
+      data.updatedAt ||
+      null,
 
     history,
 
     tryoutsCompleted:
       Number(
         data.tryoutsCompleted
-      ) || history.length,
+      ) ||
+      history.length,
 
     bestOVR:
       Math.max(
-        Number(data.bestOVR) || 0,
-        overall,
-        bestHistory
+        Number(
+          data.bestOVR
+        ) || 0,
+
+        Number(
+          data.overall
+        ) || 0,
+
+        ...history.map(
+          item =>
+            Number(
+              item?.overall
+            ) || 0
+        ),
+
+        0
       )
   };
 }
 
-function getPlayerData(playerId) {
+function getPlayerData(id) {
   return normalizePlayerData(
-    resultsDatabase[playerId]
+    resultsDatabase[id]
   );
 }
 
-/* =========================================================
-   PRESENCE
-========================================================= */
+function strikerOVR(
+  shooting,
+  passing,
+  teamwork,
+  defending
+) {
+  return Math.round(
+    (
+      Number(shooting) +
+      Number(passing) +
+      Number(teamwork) +
+      Number(defending)
+    ) / 4
+  );
+}
+
+function gkOVR(
+  goalkeeping,
+  reactionTime,
+  passing,
+  defending
+) {
+  return Math.round(
+    (
+      Number(goalkeeping) +
+      Number(reactionTime) +
+      Number(passing) +
+      Number(defending)
+    ) / 4
+  );
+}
 
 function updatePresence() {
-  try {
-    client.user?.setPresence({
-      activities: [
-        {
-          name:
-            `AUREON • ${tryouts.size}T / ${scrims.size}S`,
-          type: ActivityType.Watching
-        }
-      ],
-      status: 'online'
-    });
-  } catch {}
+  client.user?.setPresence({
+    activities: [
+      {
+        name:
+          `AUREON • ${tryouts.size}T / ${scrims.size}S`,
+        type:
+          ActivityType.Watching
+      }
+    ],
+    status: 'online'
+  });
 }
 
 /* =========================================================
@@ -456,11 +505,14 @@ function updatePresence() {
 ========================================================= */
 
 function tryoutEmbed(lobby) {
-  const playerList =
+  const players =
     lobby.players.length
       ? lobby.players
           .map(
-            (id, index) =>
+            (
+              id,
+              index
+            ) =>
               `**${index + 1}.** ${mentionUser(id)}`
           )
           .join('\n')
@@ -469,80 +521,100 @@ function tryoutEmbed(lobby) {
   return new EmbedBuilder()
     .setColor(GOLD)
     .setAuthor({
-      name: '𝐀 𝐔 𝐑 𝐄 𝐎 𝐍'
+      name:
+        '𝐀 𝐔 𝐑 𝐄 𝐎 𝐍'
     })
-    .setTitle('ᴛʀʏᴏᴜᴛ ʜᴜʙ')
+    .setTitle(
+      'ᴛʀʏᴏᴜᴛ ʜᴜʙ'
+    )
     .setDescription(
       `👑 **Host:** ${mentionUser(lobby.hostId)}\n\n` +
       `👥 **Players:** **${lobby.players.length}/${MAX_PLAYERS}**\n\n` +
-      `**PLAYER LIST**\n${playerList}`
+      `**PLAYER LIST**\n${players}`
     )
     .addFields({
-      name: '🔗 SERVER',
+      name:
+        '🔗 SERVER',
+
       value:
-        lobby.players.length === MAX_PLAYERS &&
+        lobby.players.length ===
+          MAX_PLAYERS &&
         lobby.serverLink
           ? `[🔗 Join Private Server](${lobby.serverLink})`
-          : '🔒 Server link appears at **10/10**.',
-      inline: false
+          : '🔒 Server link appears at **10/10**.'
     })
-    .setImage(BANNER_URL)
+    .setImage(
+      BANNER_URL
+    )
     .setFooter({
-      text: '✦ A U R E O N • E U ✦'
+      text:
+        '✦ A U R E O N • E U ✦'
     });
 }
 
 function tryoutButtons(lobby) {
   return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `tryout_join:${lobby.messageId}`
-        )
-        .setLabel('JOIN')
-        .setEmoji('⚡')
-        .setStyle(
-          ButtonStyle.Success
-        )
-        .setDisabled(
-          lobby.players.length >=
-            MAX_PLAYERS
-        ),
+    new ActionRowBuilder()
+      .addComponents(
 
-      new ButtonBuilder()
-        .setCustomId(
-          `tryout_leave:${lobby.messageId}`
-        )
-        .setLabel('LEAVE')
-        .setEmoji('↩️')
-        .setStyle(
-          ButtonStyle.Secondary
-        ),
+        new ButtonBuilder()
+          .setCustomId(
+            `tryout_join:${lobby.messageId}`
+          )
+          .setLabel(
+            'JOIN'
+          )
+          .setEmoji('⚡')
+          .setStyle(
+            ButtonStyle.Success
+          )
+          .setDisabled(
+            lobby.players.length >=
+              MAX_PLAYERS
+          ),
 
-      new ButtonBuilder()
-        .setCustomId(
-          `tryout_link:${lobby.messageId}`
-        )
-        .setLabel('SERVER LINK')
-        .setEmoji('🔗')
-        .setStyle(
-          ButtonStyle.Primary
-        ),
+        new ButtonBuilder()
+          .setCustomId(
+            `tryout_leave:${lobby.messageId}`
+          )
+          .setLabel(
+            'LEAVE'
+          )
+          .setEmoji('↩️')
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
 
-      new ButtonBuilder()
-        .setCustomId(
-          `tryout_close:${lobby.messageId}`
-        )
-        .setLabel('CLOSE')
-        .setEmoji('❌')
-        .setStyle(
-          ButtonStyle.Danger
-        )
-    )
+        new ButtonBuilder()
+          .setCustomId(
+            `tryout_link:${lobby.messageId}`
+          )
+          .setLabel(
+            'SERVER LINK'
+          )
+          .setEmoji('🔗')
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `tryout_close:${lobby.messageId}`
+          )
+          .setLabel(
+            'CLOSE'
+          )
+          .setEmoji('❌')
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      )
   ];
 }
 
-async function updateTryout(lobby) {
+async function updateTryout(
+  lobby
+) {
   try {
     const channel =
       await client.channels.fetch(
@@ -563,13 +635,15 @@ async function updateTryout(lobby) {
     });
   } catch (error) {
     console.error(
-      '❌ Tryout GUI error:',
+      '❌ Tryout GUI:',
       error.message
     );
   }
 }
 
-async function createTryout(interaction) {
+async function createTryout(
+  interaction
+) {
   if (
     !isHoster(
       interaction.member
@@ -583,15 +657,16 @@ async function createTryout(interaction) {
     });
   }
 
-  const alreadyActive =
-    [...tryouts.values()].some(
-      lobby =>
-        lobby.hostId ===
+  if (
+    [
+      ...tryouts.values()
+    ].some(
+      x =>
+        x.hostId ===
           interaction.user.id &&
-        !lobby.closed
-    );
-
-  if (alreadyActive) {
+        !x.closed
+    )
+  ) {
     return interaction.reply({
       content:
         '❌ You already have an active tryout.',
@@ -605,11 +680,11 @@ async function createTryout(interaction) {
       ? mentionRole(
           TRYOUT_PING_ROLE_ID
         )
-      : '';
+      : undefined;
 
   await interaction.reply({
     content:
-      ping || undefined,
+      ping,
 
     allowedMentions:
       TRYOUT_PING_ROLE_ID
@@ -656,28 +731,11 @@ async function createTryout(interaction) {
     lobby
   );
 
-  await message.edit({
-    content:
-      ping || undefined,
-
-    allowedMentions:
-      TRYOUT_PING_ROLE_ID
-        ? {
-            roles: [
-              TRYOUT_PING_ROLE_ID
-            ]
-          }
-        : undefined,
-
-    embeds: [
-      tryoutEmbed(lobby)
-    ],
-
-    components:
-      tryoutButtons(lobby)
-  });
-
   updatePresence();
+
+  await updateTryout(
+    lobby
+  );
 }
 
 async function closeTryout(
@@ -718,13 +776,15 @@ async function closeTryout(
   ) {
     await interaction
       .deferUpdate()
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
 
-    await interaction.message
+    return interaction.message
       .delete()
-      .catch(() => {});
-
-    return;
+      .catch(
+        () => {}
+      );
   }
 
   return interaction.reply({
@@ -736,160 +796,355 @@ async function closeTryout(
 }
 
 /* =========================================================
-   RESULTS MODALS
+   RESULTS SYSTEM
 ========================================================= */
 
-function numericResultInput(
-  customId,
+function scoreInput(
+  id,
   label,
-  existingValue
+  value
 ) {
-  return new TextInputBuilder()
-    .setCustomId(customId)
-    .setLabel(label)
-    .setStyle(
-      TextInputStyle.Short
+  const input =
+    new TextInputBuilder()
+      .setCustomId(id)
+      .setLabel(label)
+      .setStyle(
+        TextInputStyle.Short
+      )
+      .setRequired(true)
+      .setMaxLength(3);
+
+  if (
+    value !== undefined &&
+    value !== null &&
+    value !== ''
+  ) {
+    input.setValue(
+      String(value)
+    );
+  }
+
+  return input;
+}
+
+function notesInput(
+  value
+) {
+  const input =
+    new TextInputBuilder()
+      .setCustomId(
+        'thingsToFix'
+      )
+      .setLabel(
+        'Things to Fix (optional)'
+      )
+      .setStyle(
+        TextInputStyle.Paragraph
+      )
+      .setRequired(false)
+      .setMaxLength(1000);
+
+  if (value) {
+    input.setValue(
+      String(value)
+    );
+  }
+
+  return input;
+}
+
+/* ---------------- PLAYER TYPE ---------------- */
+
+function typeEmbed(
+  user
+) {
+  return new EmbedBuilder()
+    .setColor(GOLD)
+    .setTitle(
+      '✦ AUREON • RESULT TYPE'
     )
-    .setRequired(true)
-    .setMaxLength(3)
-    .setValue(
-      existingValue !==
-        undefined &&
-      existingValue !== null
-        ? String(existingValue)
-        : ''
+    .setDescription(
+      `👤 **Player:** ${mentionUser(user.id)}\n\n` +
+
+      `Choose what type of player you are rating.\n\n` +
+
+      `⚽ **1. STRIKER**\n` +
+      `Choose this if the player was a **CF, CM, RW or LW**.\n\n` +
+
+      `🧤 **2. GK**\n` +
+      `Choose this if the player was a **goalkeeper**.`
+    )
+    .setImage(
+      BANNER_URL
     );
 }
 
-function resultModal(
-  playerId,
-  existing
+function typeButtons(
+  playerId
 ) {
-  const modal =
-    new ModalBuilder()
-      .setCustomId(
-        `result_stats:${playerId}`
+  return [
+    new ActionRowBuilder()
+      .addComponents(
+
+        new ButtonBuilder()
+          .setCustomId(
+            `result_type:striker:${playerId}`
+          )
+          .setLabel(
+            'STRIKER'
+          )
+          .setEmoji('⚽')
+          .setStyle(
+            ButtonStyle.Success
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `result_type:gk:${playerId}`
+          )
+          .setLabel(
+            'GK'
+          )
+          .setEmoji('🧤')
+          .setStyle(
+            ButtonStyle.Primary
+          )
       )
-      .setTitle(
-        'AUREON • TRYOUT RESULTS'
-      );
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(
-      numericResultInput(
-        'shooting',
-        'Shooting (0-100)',
-        existing?.shooting
-      )
-    ),
-
-    new ActionRowBuilder().addComponents(
-      numericResultInput(
-        'passing',
-        'Passing (0-100)',
-        existing?.passing
-      )
-    ),
-
-    new ActionRowBuilder().addComponents(
-      numericResultInput(
-        'teamwork',
-        'Teamwork (0-100)',
-        existing?.teamwork
-      )
-    ),
-
-    new ActionRowBuilder().addComponents(
-      numericResultInput(
-        'defending',
-        'Defending (0-100)',
-        existing?.defending
-      )
-    ),
-
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('gk')
-        .setLabel(
-          'GK (optional • blank = OUT)'
-        )
-        .setPlaceholder(
-          'Leave blank for non-GK / not tested'
-        )
-        .setStyle(
-          TextInputStyle.Short
-        )
-        .setRequired(false)
-        .setMaxLength(3)
-        .setValue(
-          existing?.gk !==
-              null &&
-            existing?.gk !==
-              undefined
-            ? String(existing.gk)
-            : ''
-        )
-    )
-  );
-
-  return modal;
+  ];
 }
 
-function resultNotesModal(
+/* ---------------- POSITION ---------------- */
+
+function positionEmbed(
+  user
+) {
+  return new EmbedBuilder()
+    .setColor(GOLD)
+    .setTitle(
+      '⚽ STRIKER • POSITION'
+    )
+    .setDescription(
+      `👤 **Player:** ${mentionUser(user.id)}\n\n` +
+
+      `Choose which position the player was tested as.\n\n` +
+
+      `**CF** — Center Forward\n` +
+      `**CM** — Central Midfielder\n` +
+      `**RW** — Right Wing\n` +
+      `**LW** — Left Wing`
+    )
+    .setImage(
+      BANNER_URL
+    );
+}
+
+function positionButtons(
+  playerId
+) {
+  return [
+    new ActionRowBuilder()
+      .addComponents(
+
+        new ButtonBuilder()
+          .setCustomId(
+            `result_position:CF:${playerId}`
+          )
+          .setLabel(
+            'CF'
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `result_position:CM:${playerId}`
+          )
+          .setLabel(
+            'CM'
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `result_position:RW:${playerId}`
+          )
+          .setLabel(
+            'RW'
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `result_position:LW:${playerId}`
+          )
+          .setLabel(
+            'LW'
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          )
+      )
+  ];
+}
+
+/* ---------------- STRIKER MODAL ---------------- */
+
+function strikerModal(
   playerId,
-  currentNotes
+  old,
+  notes = ''
 ) {
   return new ModalBuilder()
     .setCustomId(
-      `result_notes:${playerId}`
+      `result_striker:${playerId}`
     )
     .setTitle(
-      'AUREON • THINGS TO FIX'
+      'AUREON • STRIKER RESULTS'
     )
     .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(
-            'thingsToFix'
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'shooting',
+            'Shooting (0-100)',
+            old?.shooting
           )
-          .setLabel(
-            'Things to Fix (optional)'
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'passing',
+            'Passing (0-100)',
+            old?.passing
           )
-          .setStyle(
-            TextInputStyle.Paragraph
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'teamwork',
+            'Teamwork (0-100)',
+            old?.teamwork
           )
-          .setRequired(false)
-          .setMaxLength(1000)
-          .setValue(
-            currentNotes || ''
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'defending',
+            'Defending (0-100)',
+            old?.defending
           )
-      )
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          notesInput(
+            notes ||
+            old?.thingsToFix ||
+            ''
+          )
+        )
     );
 }
 
-function resultEmbed(
-  user,
-  stats,
-  preview = false
-) {
-  const gkText =
-    stats.gk === null
-      ? 'OUT / NOT TESTED'
-      : `${stats.gk}/100`;
+/* ---------------- GK MODAL ---------------- */
 
-  return new EmbedBuilder()
-    .setColor(
-      preview
-        ? GOLD
-        : BLUE
+function gkModal(
+  playerId,
+  old,
+  notes = ''
+) {
+  return new ModalBuilder()
+    .setCustomId(
+      `result_gk:${playerId}`
     )
     .setTitle(
-      preview
-        ? '✦ PLAYER RESULT PREVIEW'
-        : '✦ AUREON PLAYER RESULT'
+      'AUREON • GK RESULTS'
     )
-    .setDescription(
-      `👤 ${mentionUser(user.id)}\n\n` +
+    .addComponents(
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'goalkeeping',
+            'Goalkeeping (0-100)',
+            old?.goalkeeping
+          )
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'reactionTime',
+            'Reaction Time (0-100)',
+            old?.reactionTime
+          )
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'passing',
+            'Passing (0-100)',
+            old?.passing
+          )
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          scoreInput(
+            'defending',
+            'Defending (0-100)',
+            old?.defending
+          )
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          notesInput(
+            notes ||
+            old?.thingsToFix ||
+            ''
+          )
+        )
+    );
+}
+
+/* ---------------- RESULT EMBED ---------------- */
+
+function resultEmbed(
+  user,
+  stats
+) {
+  let description =
+    `👤 **Player:** ${mentionUser(user.id)}\n\n`;
+
+  if (
+    stats.type === 'gk'
+  ) {
+    description +=
+      `🧤 **Type:** GOALKEEPER\n\n` +
+
+      `🧤 **Goalkeeping:** ${stats.goalkeeping}/100\n` +
+
+      `⚡ **Reaction Time:** ${stats.reactionTime}/100\n` +
+
+      `⚽ **Passing:** ${stats.passing}/100\n` +
+
+      `🛡️ **Defending:** ${stats.defending}/100\n\n`;
+  } else {
+    description +=
+      `⚽ **Type:** STRIKER\n` +
+
+      `📍 **Position:** ${stats.position}\n\n` +
 
       `🎯 **Shooting:** ${stats.shooting}/100\n` +
 
@@ -897,25 +1152,28 @@ function resultEmbed(
 
       `🤝 **Teamwork:** ${stats.teamwork}/100\n` +
 
-      `🛡️ **Defending:** ${stats.defending}/100\n` +
+      `🛡️ **Defending:** ${stats.defending}/100\n\n`;
+  }
 
-      `🧤 **GK:** ${gkText}\n\n` +
+  description +=
+    `🏆 **OVR:** ${stats.overall}\n` +
 
-      `🏆 **OVR:** ${stats.overall}\n` +
+    `🏷️ **Rank:** ${stats.rank} • ${rankText(stats.rank)}`;
 
-      `🏷️ **Rank:** ${stats.rank} • ${rankText(stats.rank)}\n\n` +
+  if (
+    stats.thingsToFix
+  ) {
+    description +=
+      `\n\n📝 **Things to Fix**\n${stats.thingsToFix}`;
+  }
 
-      (
-        stats.gk === null
-          ? 'ℹ️ GK is **NOT included** in OVR.'
-          : 'ℹ️ GK **IS included** in OVR.'
-      ) +
-
-      (
-        stats.thingsToFix
-          ? `\n\n📝 **Things to Fix**\n${stats.thingsToFix}`
-          : ''
-      )
+  return new EmbedBuilder()
+    .setColor(GOLD)
+    .setTitle(
+      '✦ PLAYER RESULT PREVIEW'
+    )
+    .setDescription(
+      description
     )
     .setThumbnail(
       user.displayAvatarURL({
@@ -931,43 +1189,33 @@ function resultButtons(
   playerId
 ) {
   return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `result_edit:${playerId}`
-        )
-        .setLabel(
-          'EDIT STATS'
-        )
-        .setEmoji('✏️')
-        .setStyle(
-          ButtonStyle.Secondary
-        ),
+    new ActionRowBuilder()
+      .addComponents(
 
-      new ButtonBuilder()
-        .setCustomId(
-          `result_notes_button:${playerId}`
-        )
-        .setLabel(
-          'THINGS TO FIX'
-        )
-        .setEmoji('📝')
-        .setStyle(
-          ButtonStyle.Primary
-        ),
+        new ButtonBuilder()
+          .setCustomId(
+            `result_edit:${playerId}`
+          )
+          .setLabel(
+            'EDIT'
+          )
+          .setEmoji('✏️')
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
 
-      new ButtonBuilder()
-        .setCustomId(
-          `result_finish:${playerId}`
-        )
-        .setLabel(
-          'FINISH'
-        )
-        .setEmoji('✅')
-        .setStyle(
-          ButtonStyle.Success
-        )
-    )
+        new ButtonBuilder()
+          .setCustomId(
+            `result_finish:${playerId}`
+          )
+          .setLabel(
+            'FINISH'
+          )
+          .setEmoji('✅')
+          .setStyle(
+            ButtonStyle.Success
+          )
+      )
   ];
 }
 
@@ -976,26 +1224,26 @@ function resultButtons(
 ========================================================= */
 
 function leaderboardEmbed() {
-  const players =
+  const rows =
     Object.entries(
       resultsDatabase
     )
       .map(
         ([id, data]) => ({
           id,
-          data:
+          d:
             normalizePlayerData(
               data
             )
         })
       )
       .filter(
-        item => item.data
+        x => x.d
       )
       .sort(
         (a, b) =>
-          (b.data.bestOVR || 0) -
-          (a.data.bestOVR || 0)
+          b.d.bestOVR -
+          a.d.bestOVR
       )
       .slice(
         0,
@@ -1008,35 +1256,71 @@ function leaderboardEmbed() {
       '🏆 AUREON • LEADERBOARD'
     )
     .setDescription(
-      players.length
-        ? players
+      rows.length
+        ? rows
             .map(
-              (item, index) =>
-                `**${index + 1}.** ${mentionUser(item.id)} — **${item.data.bestOVR} OVR** • **${item.data.rank}**`
+              (x, n) =>
+                `**${n + 1}.** ${mentionUser(x.id)} — **${x.d.bestOVR} OVR** • **${x.d.rank}**`
             )
             .join('\n')
         : 'No player results yet.'
     )
     .setImage(
       BANNER_URL
-    )
-    .setFooter({
-      text:
-        '✦ A U R E O N • E U ✦'
-    });
+    );
 }
 
 function profileEmbed(
-  playerId
+  id
 ) {
-  const data =
-    getPlayerData(
-      playerId
-    );
+  const d =
+    getPlayerData(id);
 
-  if (!data) {
+  if (!d)
     return null;
+
+  let text =
+    `${mentionUser(id)}\n\n` +
+
+    `🏆 **OVR:** ${d.overall}\n` +
+
+    `🏷️ **Rank:** ${d.rank} • ${rankText(d.rank)}\n` +
+
+    `📊 **Tryouts:** ${d.tryoutsCompleted}\n` +
+
+    `⭐ **Best OVR:** ${d.bestOVR}\n\n`;
+
+  if (
+    d.type === 'gk'
+  ) {
+    text +=
+      `🧤 **Type:** GOALKEEPER\n\n` +
+
+      `🧤 **Goalkeeping:** ${d.goalkeeping}/100\n` +
+
+      `⚡ **Reaction Time:** ${d.reactionTime}/100\n` +
+
+      `⚽ **Passing:** ${d.passing}/100\n` +
+
+      `🛡️ **Defending:** ${d.defending}/100`;
+  } else {
+    text +=
+      `⚽ **Type:** STRIKER\n` +
+
+      `📍 **Position:** ${d.position}\n\n` +
+
+      `🎯 **Shooting:** ${d.shooting}/100\n` +
+
+      `⚽ **Passing:** ${d.passing}/100\n` +
+
+      `🤝 **Teamwork:** ${d.teamwork}/100\n` +
+
+      `🛡️ **Defending:** ${d.defending}/100`;
   }
+
+  text +=
+    `\n\n📝 **Things to Fix:**\n` +
+    `${d.thingsToFix || 'None'}`;
 
   return new EmbedBuilder()
     .setColor(BLUE)
@@ -1044,92 +1328,55 @@ function profileEmbed(
       '✦ AUREON • PLAYER PROFILE'
     )
     .setDescription(
-      `${mentionUser(playerId)}\n\n` +
-
-      `🏆 **OVR:** ${data.overall}\n` +
-
-      `🏷️ **Rank:** ${data.rank} • ${rankText(data.rank)}\n` +
-
-      `📊 **Tryouts:** ${data.tryoutsCompleted}\n` +
-
-      `⭐ **Best OVR:** ${data.bestOVR}\n\n` +
-
-      `🎯 **Shooting:** ${data.shooting}/100\n` +
-
-      `⚽ **Passing:** ${data.passing}/100\n` +
-
-      `🤝 **Teamwork:** ${data.teamwork}/100\n` +
-
-      `🛡️ **Defending:** ${data.defending}/100\n` +
-
-      `🧤 **GK:** ${
-        data.gk === null
-          ? 'OUT / NOT TESTED'
-          : `${data.gk}/100`
-      }\n\n` +
-
-      `📝 **Things to Fix:**\n` +
-
-      `${data.thingsToFix || 'None'}`
+      text
     )
     .setImage(
       BANNER_URL
     );
 }
 
-/* =========================================================
-   RANK ROLE
-========================================================= */
-
 async function assignRank(
   interaction,
   playerId,
   rank
 ) {
-  const roleId =
-    roleForRank(rank);
+  const rid =
+    rankRole(rank);
 
-  if (!roleId) {
+  if (!rid) {
     return {
       ok: false,
       reason:
-        `No ${rank} role configured.`
+        `${rank} role not configured.`
     };
   }
 
   const member =
     await interaction.guild.members
-      .fetch(playerId)
+      .fetch(
+        playerId
+      )
       .catch(
         () => null
       );
 
-  if (!member) {
-    return {
-      ok: false,
-      reason:
-        'Player not in server.'
-    };
-  }
-
-  const botMember =
+  const bot =
     interaction.guild.members.me ||
-    (
-      await interaction.guild.members
-        .fetchMe()
-        .catch(
-          () => null
-        )
-    );
+    await interaction.guild.members
+      .fetchMe()
+      .catch(
+        () => null
+      );
 
   const role =
     interaction.guild.roles.cache.get(
-      roleId
+      rid
     );
 
   if (
-    !role ||
-    !botMember
+    !member ||
+    !bot ||
+    !role
   ) {
     return {
       ok: false,
@@ -1141,7 +1388,7 @@ async function assignRank(
   if (
     role.managed ||
     role.position >=
-      botMember.roles.highest.position
+      bot.roles.highest.position
   ) {
     return {
       ok: false,
@@ -1152,24 +1399,18 @@ async function assignRank(
 
   try {
     for (
-      const oldRoleId of
+      const oldRole of
       Object.values(
         RANK_ROLE_IDS
       ).filter(Boolean)
     ) {
-      if (
-        member.roles.cache.has(
-          oldRoleId
+      await member.roles
+        .remove(
+          oldRole
         )
-      ) {
-        await member.roles
-          .remove(
-            oldRoleId
-          )
-          .catch(
-            () => {}
-          );
-      }
+        .catch(
+          () => {}
+        );
     }
 
     await member.roles.add(
@@ -1178,7 +1419,8 @@ async function assignRank(
 
     return {
       ok: true,
-      roleName: role.name
+      roleName:
+        role.name
     };
   } catch (error) {
     return {
@@ -1190,41 +1432,10 @@ async function assignRank(
 }
 
 /* =========================================================
-   SCRIM SYSTEM
+   SCRIM
 ========================================================= */
 
-function getScrim(
-  messageId
-) {
-  return scrims.get(
-    messageId
-  );
-}
-
-function positionPlayers(
-  scrim,
-  position
-) {
-  return scrim.players.filter(
-    player =>
-      player.position ===
-      position
-  );
-}
-
-function allPositionsCovered(
-  scrim
-) {
-  return SCRIM_POSITIONS.every(
-    position =>
-      positionPlayers(
-        scrim,
-        position
-      ).length > 0
-  );
-}
-
-function chooseScrimEmbed(
+function scrimTypeEmbed(
   scrim
 ) {
   return new EmbedBuilder()
@@ -1239,78 +1450,167 @@ function chooseScrimEmbed(
 
       `🔵 **ELO** — Main Team only\n\n` +
 
-      `All five positions must be filled before random pick.`
+      `All five positions are required.`
     )
     .setImage(
       BANNER_URL
     );
 }
 
+function scrimTypeButtons(
+  scrim
+) {
+  return [
+    new ActionRowBuilder()
+      .addComponents(
+
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_type:friendly:${scrim.messageId}`
+          )
+          .setLabel(
+            'FRIENDLY'
+          )
+          .setEmoji('🟢')
+          .setStyle(
+            ButtonStyle.Success
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_type:elo:${scrim.messageId}`
+          )
+          .setLabel(
+            'ELO'
+          )
+          .setEmoji('🔵')
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_close:${scrim.messageId}`
+          )
+          .setLabel(
+            'CLOSE'
+          )
+          .setEmoji('❌')
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      )
+  ];
+}
+
+function positionPlayers(
+  scrim,
+  position
+) {
+  return scrim.players.filter(
+    p =>
+      p.position ===
+      position
+  );
+}
+
+function allPositionsFilled(
+  scrim
+) {
+  return SCRIM_POSITIONS.every(
+    position =>
+      positionPlayers(
+        scrim,
+        position
+      ).length > 0
+  );
+}
+
 function scrimEmbed(
   scrim
 ) {
+  const lines =
+    SCRIM_POSITIONS
+      .map(
+        position => {
+
+          let emoji =
+            '💨';
+
+          if (
+            position ===
+            'CF'
+          )
+            emoji = '⚽';
+
+          if (
+            position ===
+            'CM'
+          )
+            emoji = '🎯';
+
+          if (
+            position ===
+            'GK'
+          )
+            emoji = '🧤';
+
+          if (
+            position ===
+            'RW'
+          )
+            emoji = '🏃';
+
+          return (
+            `${emoji} **${position}:** ` +
+            (
+              positionPlayers(
+                scrim,
+                position
+              )
+                .map(
+                  x =>
+                    mentionUser(
+                      x.userId
+                    )
+                )
+                .join(', ') ||
+              '`EMPTY`'
+            )
+          );
+        }
+      )
+      .join('\n');
+
   let status;
 
   if (
-    allPositionsCovered(
+    allPositionsFilled(
       scrim
     )
   ) {
     status =
-      scrim.countdownEndTime
-        ? `⏱️ **${fmt(scrim.countdownEndTime - Date.now())}** until random pick.`
+      scrim.countdownEnd
+        ? `⏱️ **${fmt(scrim.countdownEnd - Date.now())}** until random pick.`
         : '✅ **5/5 filled • SKIP available.**';
   } else {
-    const missing =
-      SCRIM_POSITIONS.filter(
-        position =>
-          !positionPlayers(
-            scrim,
-            position
-          ).length
-      );
-
     status =
-      `⏳ **Missing:** ${missing.join(' • ')}`;
+      `⏳ **Missing:** ` +
+      SCRIM_POSITIONS
+        .filter(
+          p =>
+            !positionPlayers(
+              scrim,
+              p
+            ).length
+        )
+        .join(' • ');
   }
-
-  const rows =
-    SCRIM_POSITIONS.map(
-      position => {
-        const players =
-          positionPlayers(
-            scrim,
-            position
-          )
-            .map(
-              player =>
-                mentionUser(
-                  player.userId
-                )
-            )
-            .join(', ');
-
-        const emoji =
-          position === 'CF'
-            ? '⚽'
-            : position === 'CM'
-              ? '🎯'
-              : position === 'GK'
-                ? '🧤'
-                : position === 'RW'
-                  ? '🏃'
-                  : '💨';
-
-        return (
-          `${emoji} **${position}:** ` +
-          `${players || '`EMPTY`'}`
-        );
-      }
-    ).join('\n');
 
   return new EmbedBuilder()
     .setColor(
-      scrim.type === 'elo'
+      scrim.type ===
+        'elo'
         ? BLUE
         : GREEN
     )
@@ -1322,257 +1622,188 @@ function scrimEmbed(
       } SCRIM • POSITION QUEUE`
     )
     .setDescription(
-      `👥 **Players:** ${scrim.players.length}/${SCRIM_SELECTED_PLAYERS}\n\n` +
-      `${rows}\n\n` +
+      `👥 **Players:** ${scrim.players.length}/5\n\n` +
+      `${lines}\n\n` +
       status
     )
     .addFields({
-      name: '🔗 SERVER',
+      name:
+        '🔗 SERVER',
+
       value:
         scrim.serverLink ||
-        'Host has not added a server link yet.',
-      inline: false
+        'Host has not added a server link yet.'
     })
     .setImage(
       BANNER_URL
     )
     .setFooter({
       text:
-        '✦ SKIP only bypasses the 2-minute countdown • all 5 positions remain required'
+        '✦ SKIP only works after CF + CM + GK + RW + LW are filled'
     });
 }
 
-function randomScrimEmbed(
+function scrimButtons(
   scrim
 ) {
-  return new EmbedBuilder()
-    .setColor(GOLD)
-    .setTitle(
-      '🎲 AUREON • RANDOM PICK'
-    )
-    .setDescription(
-      `${
-        scrim.type === 'elo'
-          ? '🔵 ELO'
-          : '🟢 FRIENDLY'
-      }\n\n` +
-      'Selecting one player for each position...'
-    )
-    .setImage(
-      BANNER_URL
-    );
+  return [
+
+    new ActionRowBuilder()
+      .addComponents(
+        ...SCRIM_POSITIONS
+          .slice(0, 3)
+          .map(
+            position =>
+              new ButtonBuilder()
+                .setCustomId(
+                  `scrim_pos:${position}:${scrim.messageId}`
+                )
+                .setLabel(
+                  position
+                )
+                .setStyle(
+                  ButtonStyle.Primary
+                )
+          )
+      ),
+
+    new ActionRowBuilder()
+      .addComponents(
+
+        ...SCRIM_POSITIONS
+          .slice(3)
+          .map(
+            position =>
+              new ButtonBuilder()
+                .setCustomId(
+                  `scrim_pos:${position}:${scrim.messageId}`
+                )
+                .setLabel(
+                  position
+                )
+                .setStyle(
+                  ButtonStyle.Primary
+                )
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_skip:${scrim.messageId}`
+          )
+          .setLabel(
+            'SKIP'
+          )
+          .setEmoji('⏭️')
+          .setStyle(
+            ButtonStyle.Success
+          )
+          .setDisabled(
+            !allPositionsFilled(
+              scrim
+            )
+          )
+      ),
+
+    new ActionRowBuilder()
+      .addComponents(
+
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_leave:${scrim.messageId}`
+          )
+          .setLabel(
+            'LEAVE'
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_server:${scrim.messageId}`
+          )
+          .setLabel(
+            'SERVER LINK'
+          )
+          .setEmoji('🔗')
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_close:${scrim.messageId}`
+          )
+          .setLabel(
+            'CLOSE'
+          )
+          .setEmoji('❌')
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      )
+  ];
 }
 
 function readyScrimEmbed(
   scrim
 ) {
-  const selected =
-    scrim.selected.length
-      ? scrim.selected
-          .map(
-            player =>
-              `**${player.position}** — ${mentionUser(player.userId)}`
-          )
-          .join('\n')
-      : 'No players selected.';
-
   return new EmbedBuilder()
-    .setColor(GREEN)
+    .setColor(
+      GREEN
+    )
     .setTitle(
       '✅ AUREON • SCRIM READY'
     )
     .setDescription(
-      `${selected}\n\n` +
-      `🔗 **Server:** ${
+      scrim.selected
+        .map(
+          player =>
+            `**${player.position}** — ${mentionUser(player.userId)}`
+        )
+        .join('\n') +
+
+      `\n\n🔗 **Server:** ${
         scrim.serverLink ||
         'Not added yet.'
       }`
     )
     .setImage(
       BANNER_URL
-    )
-    .setFooter({
-      text:
-        '✦ Selected players have been pinged ✦'
-    });
+    );
 }
 
-function scrimTypeButtons(
+function readyScrimButtons(
   scrim
 ) {
   return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_type:friendly:${scrim.messageId}`
-        )
-        .setLabel(
-          'FRIENDLY'
-        )
-        .setEmoji('🟢')
-        .setStyle(
-          ButtonStyle.Success
-        ),
+    new ActionRowBuilder()
+      .addComponents(
 
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_type:elo:${scrim.messageId}`
-        )
-        .setLabel(
-          'ELO'
-        )
-        .setEmoji('🔵')
-        .setStyle(
-          ButtonStyle.Primary
-        ),
-
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_close:${scrim.messageId}`
-        )
-        .setLabel(
-          'CLOSE'
-        )
-        .setEmoji('❌')
-        .setStyle(
-          ButtonStyle.Danger
-        )
-    )
-  ];
-}
-
-function scrimPositionButtons(
-  scrim
-) {
-  const firstRow =
-    new ActionRowBuilder().addComponents(
-      ...SCRIM_POSITIONS
-        .slice(0, 3)
-        .map(
-          position =>
-            new ButtonBuilder()
-              .setCustomId(
-                `scrim_pos:${position}:${scrim.messageId}`
-              )
-              .setLabel(
-                position
-              )
-              .setStyle(
-                ButtonStyle.Primary
-              )
-        )
-    );
-
-  const secondRow =
-    new ActionRowBuilder().addComponents(
-      ...SCRIM_POSITIONS
-        .slice(3)
-        .map(
-          position =>
-            new ButtonBuilder()
-              .setCustomId(
-                `scrim_pos:${position}:${scrim.messageId}`
-              )
-              .setLabel(
-                position
-              )
-              .setStyle(
-                ButtonStyle.Primary
-              )
-        ),
-
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_skip:${scrim.messageId}`
-        )
-        .setLabel(
-          'SKIP'
-        )
-        .setEmoji('⏭️')
-        .setStyle(
-          ButtonStyle.Success
-        )
-        .setDisabled(
-          !allPositionsCovered(
-            scrim
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_server:${scrim.messageId}`
           )
-        )
-    );
+          .setLabel(
+            'SERVER LINK'
+          )
+          .setEmoji('🔗')
+          .setStyle(
+            ButtonStyle.Primary
+          ),
 
-  const thirdRow =
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_leave:${scrim.messageId}`
-        )
-        .setLabel(
-          'LEAVE'
-        )
-        .setStyle(
-          ButtonStyle.Secondary
-        ),
-
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_server:${scrim.messageId}`
-        )
-        .setLabel(
-          'SERVER LINK'
-        )
-        .setEmoji('🔗')
-        .setStyle(
-          ButtonStyle.Primary
-        ),
-
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_close:${scrim.messageId}`
-        )
-        .setLabel(
-          'CLOSE'
-        )
-        .setEmoji('❌')
-        .setStyle(
-          ButtonStyle.Danger
-        )
-    );
-
-  return [
-    firstRow,
-    secondRow,
-    thirdRow
-  ];
-}
-
-function scrimReadyButtons(
-  scrim
-) {
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_server:${scrim.messageId}`
-        )
-        .setLabel(
-          'SERVER LINK'
-        )
-        .setEmoji('🔗')
-        .setStyle(
-          ButtonStyle.Primary
-        ),
-
-      new ButtonBuilder()
-        .setCustomId(
-          `scrim_close:${scrim.messageId}`
-        )
-        .setLabel(
-          'CLOSE'
-        )
-        .setEmoji('❌')
-        .setStyle(
-          ButtonStyle.Danger
-        )
-    )
+        new ButtonBuilder()
+          .setCustomId(
+            `scrim_close:${scrim.messageId}`
+          )
+          .setLabel(
+            'CLOSE'
+          )
+          .setEmoji('❌')
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      )
   ];
 }
 
@@ -1590,121 +1821,85 @@ async function updateScrim(
         scrim.messageId
       );
 
-    let embeds;
-    let components;
-
     if (
       scrim.phase ===
       'choose'
     ) {
-      embeds = [
-        chooseScrimEmbed(
-          scrim
-        )
-      ];
+      return message.edit({
+        embeds: [
+          scrimTypeEmbed(
+            scrim
+          )
+        ],
+        components:
+          scrimTypeButtons(
+            scrim
+          )
+      });
+    }
 
-      components =
-        scrimTypeButtons(
-          scrim
-        );
-    } else if (
+    if (
       scrim.phase ===
       'queue'
     ) {
-      embeds = [
-        scrimEmbed(scrim)
-      ];
+      return message.edit({
+        embeds: [
+          scrimEmbed(
+            scrim
+          )
+        ],
+        components:
+          scrimButtons(
+            scrim
+          )
+      });
+    }
 
-      components =
-        scrimPositionButtons(
-          scrim
-        );
-    } else if (
+    if (
       scrim.phase ===
       'random'
     ) {
-      embeds = [
-        randomScrimEmbed(
-          scrim
-        )
-      ];
+      return message.edit({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(
+              GOLD
+            )
+            .setTitle(
+              '🎲 AUREON • RANDOM PICK'
+            )
+            .setDescription(
+              'Selecting one player for each position...'
+            )
+            .setImage(
+              BANNER_URL
+            )
+        ],
+        components: []
+      });
+    }
 
-      components = [];
-    } else {
-      embeds = [
+    return message.edit({
+      embeds: [
         readyScrimEmbed(
           scrim
         )
-      ];
-
-      components =
-        scrimReadyButtons(
+      ],
+      components:
+        readyScrimButtons(
           scrim
-        );
-    }
-
-    await message.edit({
-      embeds,
-      components
+        )
     });
+
   } catch (error) {
     console.error(
-      '❌ Scrim GUI error:',
+      '❌ Scrim GUI:',
       error.message
     );
   }
 }
 
-/* =========================================================
-   SCRIM PINGS
-========================================================= */
-
-async function pingScrimRole(
-  scrim
-) {
-  const roleId =
-    scrim.type === 'elo'
-      ? ELO_SCRIM_PING_ROLE_ID
-      : FRIENDLY_SCRIM_PING_ROLE_ID;
-
-  if (!roleId) {
-    return;
-  }
-
-  const channel =
-    await client.channels
-      .fetch(
-        scrim.channelId
-      )
-      .catch(
-        () => null
-      );
-
-  if (
-    !channel?.isTextBased()
-  ) {
-    return;
-  }
-
-  await channel
-    .send({
-      content:
-        mentionRole(
-          roleId
-        ),
-
-      allowedMentions: {
-        roles: [
-          roleId
-        ]
-      }
-    })
-    .catch(
-      () => {}
-    );
-}
-
-async function pingSelectedScrimPlayers(
+async function pingScrimPlayers(
   scrim
 ) {
   if (
@@ -1716,8 +1911,8 @@ async function pingSelectedScrimPlayers(
   const userIds = [
     ...new Set(
       scrim.selected.map(
-        player =>
-          player.userId
+        x =>
+          x.userId
       )
     )
   ];
@@ -1737,141 +1932,106 @@ async function pingSelectedScrimPlayers(
     return;
   }
 
-  const serverLine =
-    scrim.serverLink
-      ? `🔗 **Server link is ready:** ${scrim.serverLink}`
-      : '🔗 **Server link is ready to be added.**';
+  await channel.send({
+    content:
+      `⚡ **SCRIM READY**\n\n` +
+      `${userIds.map(mentionUser).join(' ')}\n\n` +
+      `You were selected for the lineup.\n` +
+      (
+        scrim.serverLink
+          ? `🔗 **Server link:** ${scrim.serverLink}`
+          : '🔗 **Server link is ready to be added.**'
+      ),
 
-  await channel
-    .send({
-      content:
-        `⚡ **SCRIM READY**\n\n` +
-        `${userIds.map(mentionUser).join(' ')}\n\n` +
-        `You were selected for the lineup.\n` +
-        serverLine,
-
-      allowedMentions: {
-        users:
-          userIds
-      }
-    })
+    allowedMentions: {
+      users:
+        userIds
+    }
+  })
     .catch(
       () => {}
     );
 }
 
-/* =========================================================
-   SCRIM COUNTDOWN
-========================================================= */
+async function pingScrimRole(
+  scrim
+) {
+  const role =
+    scrim.type ===
+      'elo'
+      ? ELO_SCRIM_PING_ROLE_ID
+      : FRIENDLY_SCRIM_PING_ROLE_ID;
 
-function stopScrimCountdown(
+  if (!role)
+    return;
+
+  const channel =
+    await client.channels
+      .fetch(
+        scrim.channelId
+      )
+      .catch(
+        () => null
+      );
+
+  if (
+    !channel?.isTextBased()
+  ) {
+    return;
+  }
+
+  await channel.send({
+    content:
+      mentionRole(role),
+
+    allowedMentions: {
+      roles: [
+        role
+      ]
+    }
+  })
+    .catch(
+      () => {}
+    );
+}
+
+function stopCountdown(
   scrim
 ) {
   if (
-    scrim.countdownTimer
+    scrim.timer
   ) {
     clearInterval(
-      scrim.countdownTimer
+      scrim.timer
     );
-
-    scrim.countdownTimer =
-      null;
   }
 
-  scrim.countdownEndTime =
+  scrim.timer =
+    null;
+
+  scrim.countdownEnd =
     null;
 }
 
-function startScrimCountdown(
+async function randomPick(
   scrim
 ) {
   if (
-    scrim.phase !== 'queue' ||
-    !allPositionsCovered(
+    !allPositionsFilled(
       scrim
     ) ||
-    scrim.countdownTimer
+    scrim.phase !==
+      'queue'
   ) {
     return;
   }
 
-  scrim.countdownEndTime =
-    Date.now() +
-    SCRIM_START_DELAY;
-
-  scrim.countdownTimer =
-    setInterval(
-      async () => {
-        if (
-          scrim.phase !==
-          'queue'
-        ) {
-          stopScrimCountdown(
-            scrim
-          );
-          return;
-        }
-
-        if (
-          !allPositionsCovered(
-            scrim
-          )
-        ) {
-          stopScrimCountdown(
-            scrim
-          );
-
-          await updateScrim(
-            scrim
-          );
-
-          return;
-        }
-
-        if (
-          Date.now() >=
-          scrim.countdownEndTime
-        ) {
-          stopScrimCountdown(
-            scrim
-          );
-
-          await startScrimRandomPick(
-            scrim
-          );
-
-          return;
-        }
-
-        await updateScrim(
-          scrim
-        );
-      },
-      TIMER_CHECK
-    );
-}
-
-async function startScrimRandomPick(
-  scrim
-) {
-  if (
-    scrim.phase !== 'queue' ||
-    !allPositionsCovered(
-      scrim
-    )
-  ) {
-    return;
-  }
-
-  stopScrimCountdown(
+  stopCountdown(
     scrim
   );
 
   scrim.phase =
     'random';
-
-  scrim.picking =
-    true;
 
   await updateScrim(
     scrim
@@ -1880,32 +2040,22 @@ async function startScrimRandomPick(
   scrim.randomTimer =
     setTimeout(
       async () => {
+
         scrim.selected =
           SCRIM_POSITIONS
             .map(
-              position => {
-                const candidates =
+              position =>
+                shuffle(
                   positionPlayers(
                     scrim,
                     position
-                  );
-
-                return shuffle(
-                  candidates
-                )[0];
-              }
+                  )
+                )[0]
             )
-            .filter(Boolean)
-            .slice(
-              0,
-              SCRIM_SELECTED_PLAYERS
-            );
+            .filter(Boolean);
 
         scrim.phase =
           'ready';
-
-        scrim.picking =
-          false;
 
         scrim.randomTimer =
           null;
@@ -1914,7 +2064,7 @@ async function startScrimRandomPick(
           scrim
         );
 
-        await pingSelectedScrimPlayers(
+        await pingScrimPlayers(
           scrim
         );
       },
@@ -1922,9 +2072,60 @@ async function startScrimRandomPick(
     );
 }
 
-/* =========================================================
-   CREATE / CLOSE SCRIM
-========================================================= */
+function startCountdown(
+  scrim
+) {
+  if (
+    scrim.phase !==
+      'queue' ||
+    !allPositionsFilled(
+      scrim
+    ) ||
+    scrim.timer
+  ) {
+    return;
+  }
+
+  scrim.countdownEnd =
+    Date.now() +
+    SCRIM_START_DELAY;
+
+  scrim.timer =
+    setInterval(
+      async () => {
+
+        if (
+          scrim.phase !==
+            'queue' ||
+          !allPositionsFilled(
+            scrim
+          )
+        ) {
+          stopCountdown(
+            scrim
+          );
+
+          return;
+        }
+
+        if (
+          Date.now() >=
+          scrim.countdownEnd
+        ) {
+          await randomPick(
+            scrim
+          );
+
+          return;
+        }
+
+        await updateScrim(
+          scrim
+        );
+      },
+      5000
+    );
+}
 
 async function createScrim(
   interaction
@@ -1942,15 +2143,15 @@ async function createScrim(
     });
   }
 
-  const alreadyActive =
-    [...scrims.values()]
-      .some(
-        scrim =>
-          scrim.hostId ===
-          interaction.user.id
-      );
-
-  if (alreadyActive) {
+  if (
+    [
+      ...scrims.values()
+    ].some(
+      x =>
+        x.hostId ===
+        interaction.user.id
+    )
+  ) {
     return interaction.reply({
       content:
         '❌ You already have an active scrim.',
@@ -1985,22 +2186,19 @@ async function createScrim(
     serverLink:
       null,
 
-    countdownEndTime:
+    timer:
       null,
 
-    countdownTimer:
+    countdownEnd:
       null,
 
     randomTimer:
-      null,
-
-    picking:
-      false
+      null
   };
 
   await interaction.reply({
     embeds: [
-      chooseScrimEmbed(
+      scrimTypeEmbed(
         scrim
       )
     ],
@@ -2020,7 +2218,7 @@ async function createScrim(
 
   await message.edit({
     embeds: [
-      chooseScrimEmbed(
+      scrimTypeEmbed(
         scrim
       )
     ],
@@ -2058,7 +2256,7 @@ async function closeScrim(
     });
   }
 
-  stopScrimCountdown(
+  stopCountdown(
     scrim
   );
 
@@ -2068,9 +2266,6 @@ async function closeScrim(
     clearTimeout(
       scrim.randomTimer
     );
-
-    scrim.randomTimer =
-      null;
   }
 
   scrims.delete(
@@ -2084,13 +2279,15 @@ async function closeScrim(
   ) {
     await interaction
       .deferUpdate()
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
 
-    await interaction.message
+    return interaction.message
       .delete()
-      .catch(() => {});
-
-    return;
+      .catch(
+        () => {}
+      );
   }
 
   return interaction.reply({
@@ -2105,7 +2302,7 @@ async function closeScrim(
    ANNOUNCEMENTS
 ========================================================= */
 
-function announcementEmbed(
+function announceEmbed(
   announcement
 ) {
   return new EmbedBuilder()
@@ -2127,52 +2324,54 @@ function announcementEmbed(
     );
 }
 
-function announcementButtons(
+function announceButtons(
   announcement
 ) {
   return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `announcement_ready:${announcement.messageId}`
-        )
-        .setLabel(
-          `READY ${announcement.ready.length}/${MAX_PLAYERS}`
-        )
-        .setStyle(
-          ButtonStyle.Success
-        )
-        .setDisabled(
-          announcement.ready.length >=
-            MAX_PLAYERS
-        ),
+    new ActionRowBuilder()
+      .addComponents(
 
-      new ButtonBuilder()
-        .setCustomId(
-          `announcement_notready:${announcement.messageId}`
-        )
-        .setLabel(
-          'NOT READY'
-        )
-        .setStyle(
-          ButtonStyle.Secondary
-        ),
+        new ButtonBuilder()
+          .setCustomId(
+            `announcement_ready:${announcement.messageId}`
+          )
+          .setLabel(
+            `READY ${announcement.ready.length}/${MAX_PLAYERS}`
+          )
+          .setStyle(
+            ButtonStyle.Success
+          )
+          .setDisabled(
+            announcement.ready.length >=
+              MAX_PLAYERS
+          ),
 
-      new ButtonBuilder()
-        .setCustomId(
-          `announcement_reping:${announcement.messageId}`
-        )
-        .setLabel(
-          'RE-PING'
-        )
-        .setStyle(
-          ButtonStyle.Primary
-        )
-    )
+        new ButtonBuilder()
+          .setCustomId(
+            `announcement_notready:${announcement.messageId}`
+          )
+          .setLabel(
+            'NOT READY'
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `announcement_reping:${announcement.messageId}`
+          )
+          .setLabel(
+            'RE-PING'
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          )
+      )
   ];
 }
 
-function announcementModal() {
+function announceModal() {
   return new ModalBuilder()
     .setCustomId(
       'tryout_announce_modal'
@@ -2181,24 +2380,27 @@ function announcementModal() {
       'AUREON • ANNOUNCEMENT'
     )
     .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(
-            'announcement_message'
-          )
-          .setLabel(
-            'Announcement message'
-          )
-          .setStyle(
-            TextInputStyle.Paragraph
-          )
-          .setRequired(false)
-          .setMaxLength(4000)
-      )
+      new ActionRowBuilder()
+        .addComponents(
+          new TextInputBuilder()
+            .setCustomId(
+              'announcement_message'
+            )
+            .setLabel(
+              'Announcement message'
+            )
+            .setStyle(
+              TextInputStyle.Paragraph
+            )
+            .setRequired(false)
+            .setMaxLength(
+              4000
+            )
+        )
     );
 }
 
-async function updateAnnouncement(
+async function updateAnnounce(
   announcement
 ) {
   try {
@@ -2214,13 +2416,12 @@ async function updateAnnouncement(
 
     await message.edit({
       embeds: [
-        announcementEmbed(
+        announceEmbed(
           announcement
         )
       ],
-
       components:
-        announcementButtons(
+        announceButtons(
           announcement
         )
     });
@@ -2228,12 +2429,13 @@ async function updateAnnouncement(
 }
 
 /* =========================================================
-   INTERACTION CREATE
+   INTERACTIONS
 ========================================================= */
 
 client.on(
   'interactionCreate',
   async interaction => {
+
     try {
 
       /* =====================================================
@@ -2241,31 +2443,28 @@ client.on(
       ===================================================== */
 
       if (
-        interaction.isChatInputCommand()
-      ) {
-        if (
-          interaction.commandName !==
+        interaction.isChatInputCommand() &&
+        interaction.commandName ===
           'tryout'
-        ) {
-          return;
-        }
+      ) {
 
         const group =
-          interaction.options.getSubcommandGroup(
-            false
-          );
+          interaction.options
+            .getSubcommandGroup(
+              false
+            );
 
         const subcommand =
-          interaction.options.getSubcommand();
+          interaction.options
+            .getSubcommand();
 
-        /* ===================================================
-           /tryout scrim create
-           /tryout scrim close
-        =================================================== */
+        /* ---------------- SCRIM ---------------- */
 
         if (
-          group === 'scrim'
+          group ===
+          'scrim'
         ) {
+
           if (
             subcommand ===
             'create'
@@ -2280,12 +2479,13 @@ client.on(
             'close'
           ) {
             const scrim =
-              [...scrims.values()]
-                .find(
-                  item =>
-                    item.hostId ===
-                    interaction.user.id
-                );
+              [
+                ...scrims.values()
+              ].find(
+                x =>
+                  x.hostId ===
+                  interaction.user.id
+              );
 
             return closeScrim(
               interaction,
@@ -2296,9 +2496,7 @@ client.on(
           return;
         }
 
-        /* ===================================================
-           /tryout create
-        =================================================== */
+        /* ---------------- CREATE ---------------- */
 
         if (
           subcommand ===
@@ -2309,31 +2507,21 @@ client.on(
           );
         }
 
-        /* ===================================================
-           /tryout close
-        =================================================== */
+        /* ---------------- CLOSE ---------------- */
 
         if (
           subcommand ===
           'close'
         ) {
           const lobby =
-            [...tryouts.values()]
-              .find(
-                item =>
-                  item.hostId ===
-                    interaction.user.id &&
-                  !item.closed
-              );
-
-          if (!lobby) {
-            return interaction.reply({
-              content:
-                '❌ You do not have an active tryout.',
-              flags:
-                MessageFlags.Ephemeral
-            });
-          }
+            [
+              ...tryouts.values()
+            ].find(
+              x =>
+                x.hostId ===
+                  interaction.user.id &&
+                !x.closed
+            );
 
           return closeTryout(
             interaction,
@@ -2341,14 +2529,13 @@ client.on(
           );
         }
 
-        /* ===================================================
-           /tryout results
-        =================================================== */
+        /* ---------------- RESULTS ---------------- */
 
         if (
           subcommand ===
           'results'
         ) {
+
           if (
             !isHoster(
               interaction.member
@@ -2363,23 +2550,32 @@ client.on(
           }
 
           return interaction.reply({
+
             content:
-              '✦ **AUREON • PLAYER RESULTS** ✦\n' +
-              'Select the player to rate.\n\n' +
-              '**GK can be left blank. Defending is included in OVR.**',
+              `✦ **AUREON • PLAYER RESULTS** ✦\n` +
+              `Select the player you are rating.\n\n` +
+
+              `**Flow:** Player → Striker/GK → Position (Striker only) → Stats\n\n` +
+
+              `**Striker:** Shooting • Passing • Teamwork • Defending\n` +
+
+              `**GK:** Goalkeeping • Reaction Time • Passing • Defending\n\n` +
+
+              `Build: ${BUILD_VERSION}`,
 
             components: [
-              new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                  .setCustomId(
-                    'result_player_select'
-                  )
-                  .setPlaceholder(
-                    'Select a player'
-                  )
-                  .setMinValues(1)
-                  .setMaxValues(1)
-              )
+              new ActionRowBuilder()
+                .addComponents(
+                  new UserSelectMenuBuilder()
+                    .setCustomId(
+                      'result_player_select'
+                    )
+                    .setPlaceholder(
+                      'Select a player'
+                    )
+                    .setMinValues(1)
+                    .setMaxValues(1)
+                )
             ],
 
             flags:
@@ -2387,9 +2583,7 @@ client.on(
           });
         }
 
-        /* ===================================================
-           /tryout leaderboard
-        =================================================== */
+        /* ---------------- LEADERBOARD ---------------- */
 
         if (
           subcommand ===
@@ -2402,18 +2596,17 @@ client.on(
           });
         }
 
-        /* ===================================================
-           /tryout profile
-        =================================================== */
+        /* ---------------- PROFILE ---------------- */
 
         if (
           subcommand ===
           'profile'
         ) {
           const user =
-            interaction.options.getUser(
-              'player'
-            ) ||
+            interaction.options
+              .getUser(
+                'player'
+              ) ||
             interaction.user;
 
           const embed =
@@ -2437,14 +2630,13 @@ client.on(
           );
         }
 
-        /* ===================================================
-           /tryout announce
-        =================================================== */
+        /* ---------------- ANNOUNCE ---------------- */
 
         if (
           subcommand ===
           'announce'
         ) {
+
           if (
             !isHoster(
               interaction.member
@@ -2459,49 +2651,44 @@ client.on(
           }
 
           const unit =
-            interaction.options.getString(
-              'unit',
-              true
-            );
+            interaction.options
+              .getString(
+                'unit',
+                true
+              );
 
           const amount =
-            interaction.options.getInteger(
-              'amount',
-              true
-            );
+            interaction.options
+              .getInteger(
+                'amount',
+                true
+              );
 
           pendingAnnouncements.set(
             interaction.user.id,
             {
               unit,
+
               amount,
 
               duration:
                 unit === 'minutes'
-                  ? amount *
-                    60 *
-                    1000
-                  : amount *
-                    60 *
-                    60 *
-                    1000,
+                  ? amount * 60000
+                  : amount * 3600000,
 
               channelId:
-                interaction.channelId,
-
-              guildId:
-                interaction.guildId
+                interaction.channelId
             }
           );
 
           return interaction.showModal(
-            announcementModal()
+            announceModal()
           );
         }
       }
 
       /* =====================================================
-         USER SELECT
+         PLAYER SELECT
       ===================================================== */
 
       if (
@@ -2509,6 +2696,7 @@ client.on(
         interaction.customId ===
           'result_player_select'
       ) {
+
         if (
           !isHoster(
             interaction.member
@@ -2525,10 +2713,34 @@ client.on(
         const playerId =
           interaction.values[0];
 
+        const user =
+          await client.users
+            .fetch(
+              playerId
+            )
+            .catch(
+              () => null
+            );
+
+        if (!user) {
+          return interaction.reply({
+            content:
+              '❌ Player not found.',
+            flags:
+              MessageFlags.Ephemeral
+          });
+        }
+
         drafts.set(
           interaction.user.id,
           {
             playerId,
+
+            type:
+              null,
+
+            position:
+              null,
 
             stats:
               null,
@@ -2536,18 +2748,27 @@ client.on(
             notes:
               getPlayerData(
                 playerId
-              )?.thingsToFix || ''
+              )?.thingsToFix ||
+              ''
           }
         );
 
-        return interaction.showModal(
-          resultModal(
-            playerId,
-            getPlayerData(
+        return interaction.update({
+
+          content:
+            '',
+
+          embeds: [
+            typeEmbed(
+              user
+            )
+          ],
+
+          components:
+            typeButtons(
               playerId
             )
-          )
-        );
+        });
       }
 
       /* =====================================================
@@ -2558,23 +2779,21 @@ client.on(
         interaction.isModalSubmit()
       ) {
 
-        /* ===================================================
-           SCRIM SERVER LINK
-        =================================================== */
+        /* ---------------- SCRIM LINK ---------------- */
 
         if (
           interaction.customId.startsWith(
-            'scrim_server_link_modal:'
+            'scrim_server_modal:'
           )
         ) {
-          const messageId =
-            interaction.customId.split(
-              ':'
-            )[1];
+
+          const id =
+            interaction.customId
+              .split(':')[1];
 
           const scrim =
-            getScrim(
-              messageId
+            scrims.get(
+              id
             );
 
           if (!scrim) {
@@ -2598,24 +2817,12 @@ client.on(
             });
           }
 
-          const link =
+          scrim.serverLink =
             interaction.fields
               .getTextInputValue(
                 'scrim_server_link'
               )
               .trim();
-
-          if (!link) {
-            return interaction.reply({
-              content:
-                '❌ Enter a link.',
-              flags:
-                MessageFlags.Ephemeral
-            });
-          }
-
-          scrim.serverLink =
-            link;
 
           await interaction.reply({
             content:
@@ -2632,7 +2839,7 @@ client.on(
             scrim.phase ===
             'ready'
           ) {
-            await pingSelectedScrimPlayers(
+            await pingScrimPlayers(
               scrim
             );
           }
@@ -2640,23 +2847,21 @@ client.on(
           return;
         }
 
-        /* ===================================================
-           TRYOUT SERVER LINK
-        =================================================== */
+        /* ---------------- TRYOUT LINK ---------------- */
 
         if (
           interaction.customId.startsWith(
             'tryout_server_modal:'
           )
         ) {
-          const messageId =
-            interaction.customId.split(
-              ':'
-            )[1];
+
+          const id =
+            interaction.customId
+              .split(':')[1];
 
           const lobby =
             tryouts.get(
-              messageId
+              id
             );
 
           if (!lobby) {
@@ -2694,27 +2899,24 @@ client.on(
               MessageFlags.Ephemeral
           });
 
-          await updateTryout(
+          return updateTryout(
             lobby
           );
-
-          return;
         }
 
-        /* ===================================================
-           ANNOUNCEMENT MODAL
-        =================================================== */
+        /* ---------------- ANNOUNCEMENT ---------------- */
 
         if (
           interaction.customId ===
           'tryout_announce_modal'
         ) {
-          const pending =
+
+          const p =
             pendingAnnouncements.get(
               interaction.user.id
             );
 
-          if (!pending) {
+          if (!p) {
             return interaction.reply({
               content:
                 '❌ Announcement expired.',
@@ -2731,23 +2933,11 @@ client.on(
             hostId:
               interaction.user.id,
 
-            guildId:
-              pending.guildId,
-
             channelId:
-              pending.channelId,
+              p.channelId,
 
             messageId:
               null,
-
-            unit:
-              pending.unit,
-
-            amount:
-              pending.amount,
-
-            duration:
-              pending.duration,
 
             customMessage:
               interaction.fields
@@ -2762,7 +2952,7 @@ client.on(
 
             endTime:
               Date.now() +
-              pending.duration,
+              p.duration,
 
             timer:
               null,
@@ -2773,10 +2963,11 @@ client.on(
 
           await interaction.reply({
             embeds: [
-              announcementEmbed(
+              announceEmbed(
                 announcement
               )
             ],
+
             components: []
           });
 
@@ -2793,13 +2984,13 @@ client.on(
 
           await message.edit({
             embeds: [
-              announcementEmbed(
+              announceEmbed(
                 announcement
               )
             ],
 
             components:
-              announcementButtons(
+              announceButtons(
                 announcement
               )
           });
@@ -2809,6 +3000,7 @@ client.on(
           ) {
             await interaction.channel
               .send({
+
                 content:
                   mentionRole(
                     TRYOUT_PING_ROLE_ID
@@ -2828,6 +3020,7 @@ client.on(
           announcement.timer =
             setInterval(
               async () => {
+
                 if (
                   announcement.closed
                 ) {
@@ -2844,6 +3037,7 @@ client.on(
                   Date.now() >=
                     announcement.endTime
                 ) {
+
                   announcement.closed =
                     true;
 
@@ -2851,8 +3045,13 @@ client.on(
                     announcement.timer
                   );
 
+                  announcements.delete(
+                    announcement.messageId
+                  );
+
                   await message
                     .edit({
+
                       embeds: [
                         new EmbedBuilder()
                           .setColor(
@@ -2881,14 +3080,10 @@ client.on(
                       () => {}
                     );
 
-                  announcements.delete(
-                    message.id
-                  );
-
                   return;
                 }
 
-                await updateAnnouncement(
+                await updateAnnounce(
                   announcement
                 );
               },
@@ -2898,58 +3093,76 @@ client.on(
           return;
         }
 
-        /* ===================================================
-           RESULT STATS MODAL
-        =================================================== */
+        /* =================================================
+           STRIKER RESULT
+        ================================================= */
 
         if (
           interaction.customId.startsWith(
-            'result_stats:'
+            'result_striker:'
           )
         ) {
+
           await interaction.deferReply({
             flags:
               MessageFlags.Ephemeral
           });
 
           const playerId =
-            interaction.customId.split(
-              ':'
-            )[1];
+            interaction.customId
+              .split(':')[1];
 
-          function readScore(
-            fieldId
+          const draft =
+            drafts.get(
+              interaction.user.id
+            );
+
+          if (
+            !draft ||
+            draft.playerId !==
+              playerId ||
+            draft.type !==
+              'striker'
           ) {
-            const raw =
-              interaction.fields
-                .getTextInputValue(
-                  fieldId
-                )
-                .trim();
-
-            if (
-              !/^\d{1,3}$/.test(
-                raw
-              )
-            ) {
-              return null;
-            }
-
-            const value =
-              Number(raw);
-
-            if (
-              !Number.isInteger(
-                value
-              ) ||
-              value < 0 ||
-              value > 100
-            ) {
-              return null;
-            }
-
-            return value;
+            return interaction.editReply({
+              content:
+                '❌ Result draft expired. Run /tryout results again.'
+            });
           }
+
+          const readScore =
+            fieldId => {
+
+              const raw =
+                interaction.fields
+                  .getTextInputValue(
+                    fieldId
+                  )
+                  .trim();
+
+              if (
+                !/^\d{1,3}$/.test(
+                  raw
+                )
+              ) {
+                return null;
+              }
+
+              const value =
+                Number(raw);
+
+              if (
+                value < 0 ||
+                value > 100 ||
+                !Number.isInteger(
+                  value
+                )
+              ) {
+                return null;
+              }
+
+              return value;
+            };
 
           const shooting =
             readScore(
@@ -2971,30 +3184,13 @@ client.on(
               'defending'
             );
 
-          const gkRaw =
+          const thingsToFix =
             interaction.fields
               .getTextInputValue(
-                'gk'
+                'thingsToFix'
               )
-              .trim();
-
-          let gk =
-            null;
-
-          if (
-            gkRaw !== ''
-          ) {
-            if (
-              !/^\d{1,3}$/.test(
-                gkRaw
-              )
-            ) {
-              gk = -1;
-            } else {
-              gk =
-                Number(gkRaw);
-            }
-          }
+              ?.trim() ||
+            '';
 
           if (
             [
@@ -3003,56 +3199,48 @@ client.on(
               teamwork,
               defending
             ].some(
-              value =>
-                value === null
-            ) ||
-            (
-              gk !== null &&
-              (
-                gk < 0 ||
-                gk > 100 ||
-                !Number.isInteger(
-                  gk
-                )
-              )
+              x =>
+                x === null
             )
           ) {
             return interaction.editReply({
               content:
-                '❌ Shooting, Passing, Teamwork and Defending must be 0-100. GK can be blank or 0-100.'
+                '❌ Shooting, Passing, Teamwork and Defending must all be 0-100.'
             });
           }
 
-          const previousDraft =
-            drafts.get(
-              interaction.user.id
-            );
-
-          const oldPlayer =
-            getPlayerData(
-              playerId
-            );
-
           const stats = {
+
+            type:
+              'striker',
+
+            position:
+              draft.position ||
+              'CF',
+
             shooting,
+
             passing,
+
             teamwork,
+
             defending,
-            gk,
+
+            goalkeeping:
+              0,
+
+            reactionTime:
+              0,
 
             overall:
-              calculateOverall(
+              strikerOVR(
                 shooting,
                 passing,
                 teamwork,
-                defending,
-                gk
+                defending
               ),
 
-            thingsToFix:
-              previousDraft?.notes ||
-              oldPlayer?.thingsToFix ||
-              ''
+            thingsToFix
           };
 
           stats.rank =
@@ -3060,14 +3248,15 @@ client.on(
               stats.overall
             );
 
+          draft.stats =
+            stats;
+
+          draft.notes =
+            thingsToFix;
+
           drafts.set(
             interaction.user.id,
-            {
-              playerId,
-              stats,
-              notes:
-                stats.thingsToFix
-            }
+            draft
           );
 
           const user =
@@ -3087,11 +3276,11 @@ client.on(
           }
 
           return interaction.editReply({
+
             embeds: [
               resultEmbed(
                 user,
-                stats,
-                true
+                stats
               )
             ],
 
@@ -3102,24 +3291,24 @@ client.on(
           });
         }
 
-        /* ===================================================
-           RESULT NOTES MODAL
-        =================================================== */
+        /* =================================================
+           GK RESULT
+        ================================================= */
 
         if (
           interaction.customId.startsWith(
-            'result_notes:'
+            'result_gk:'
           )
         ) {
+
           await interaction.deferReply({
             flags:
               MessageFlags.Ephemeral
           });
 
           const playerId =
-            interaction.customId.split(
-              ':'
-            )[1];
+            interaction.customId
+              .split(':')[1];
 
           const draft =
             drafts.get(
@@ -3129,15 +3318,71 @@ client.on(
           if (
             !draft ||
             draft.playerId !==
-              playerId
+              playerId ||
+            draft.type !==
+              'gk'
           ) {
             return interaction.editReply({
               content:
-                '❌ Result draft not found. Start /tryout results again.'
+                '❌ Result draft expired. Run /tryout results again.'
             });
           }
 
-          const notes =
+          const readScore =
+            fieldId => {
+
+              const raw =
+                interaction.fields
+                  .getTextInputValue(
+                    fieldId
+                  )
+                  .trim();
+
+              if (
+                !/^\d{1,3}$/.test(
+                  raw
+                )
+              ) {
+                return null;
+              }
+
+              const value =
+                Number(raw);
+
+              if (
+                value < 0 ||
+                value > 100 ||
+                !Number.isInteger(
+                  value
+                )
+              ) {
+                return null;
+              }
+
+              return value;
+            };
+
+          const goalkeeping =
+            readScore(
+              'goalkeeping'
+            );
+
+          const reactionTime =
+            readScore(
+              'reactionTime'
+            );
+
+          const passing =
+            readScore(
+              'passing'
+            );
+
+          const defending =
+            readScore(
+              'defending'
+            );
+
+          const thingsToFix =
             interaction.fields
               .getTextInputValue(
                 'thingsToFix'
@@ -3145,15 +3390,66 @@ client.on(
               ?.trim() ||
             '';
 
-          draft.notes =
-            notes;
-
           if (
-            draft.stats
+            [
+              goalkeeping,
+              reactionTime,
+              passing,
+              defending
+            ].some(
+              x =>
+                x === null
+            )
           ) {
-            draft.stats.thingsToFix =
-              notes;
+            return interaction.editReply({
+              content:
+                '❌ Goalkeeping, Reaction Time, Passing and Defending must all be 0-100.'
+            });
           }
+
+          const stats = {
+
+            type:
+              'gk',
+
+            position:
+              'GK',
+
+            shooting:
+              0,
+
+            teamwork:
+              0,
+
+            goalkeeping,
+
+            reactionTime,
+
+            passing,
+
+            defending,
+
+            overall:
+              gkOVR(
+                goalkeeping,
+                reactionTime,
+                passing,
+                defending
+              ),
+
+            thingsToFix
+          };
+
+          stats.rank =
+            getRank(
+              stats.overall
+            );
+
+          draft.stats =
+            stats;
+
+          draft.notes =
+            thingsToFix;
 
           drafts.set(
             interaction.user.id,
@@ -3169,22 +3465,19 @@ client.on(
                 () => null
               );
 
-          if (
-            !user ||
-            !draft.stats
-          ) {
+          if (!user) {
             return interaction.editReply({
               content:
-                '✅ Notes saved. Enter the stats first if you want the full preview.'
+                '❌ Player not found.'
             });
           }
 
           return interaction.editReply({
+
             embeds: [
               resultEmbed(
                 user,
-                draft.stats,
-                true
+                stats
               )
             ],
 
@@ -3203,18 +3496,370 @@ client.on(
       if (
         interaction.isButton()
       ) {
+
         const id =
           interaction.customId;
 
-        /* ===================================================
+        /* ---------------- RESULT TYPE ---------------- */
+
+        if (
+          id.startsWith(
+            'result_type:'
+          )
+        ) {
+
+          const [
+            ,
+            type,
+            playerId
+          ] =
+            id.split(':');
+
+          const draft =
+            drafts.get(
+              interaction.user.id
+            );
+
+          if (
+            !draft ||
+            draft.playerId !==
+              playerId
+          ) {
+            return interaction.reply({
+              content:
+                '❌ Result draft expired. Run /tryout results again.',
+              flags:
+                MessageFlags.Ephemeral
+            });
+          }
+
+          const user =
+            await client.users
+              .fetch(
+                playerId
+              )
+              .catch(
+                () => null
+              );
+
+          if (!user) {
+            return interaction.reply({
+              content:
+                '❌ Player not found.',
+              flags:
+                MessageFlags.Ephemeral
+            });
+          }
+
+          if (
+            type ===
+            'gk'
+          ) {
+
+            draft.type =
+              'gk';
+
+            draft.position =
+              'GK';
+
+            drafts.set(
+              interaction.user.id,
+              draft
+            );
+
+            return interaction.showModal(
+              gkModal(
+                playerId,
+                getPlayerData(
+                  playerId
+                ),
+                draft.notes ||
+                ''
+              )
+            );
+          }
+
+          draft.type =
+            'striker';
+
+          drafts.set(
+            interaction.user.id,
+            draft
+          );
+
+          return interaction.update({
+            content:
+              '',
+
+            embeds: [
+              positionEmbed(
+                user
+              )
+            ],
+
+            components:
+              positionButtons(
+                playerId
+              )
+          });
+        }
+
+        /* ---------------- RESULT POSITION ---------------- */
+
+        if (
+          id.startsWith(
+            'result_position:'
+          )
+        ) {
+
+          const [
+            ,
+            position,
+            playerId
+          ] =
+            id.split(':');
+
+          const draft =
+            drafts.get(
+              interaction.user.id
+            );
+
+          if (
+            !draft ||
+            draft.playerId !==
+              playerId
+          ) {
+            return interaction.reply({
+              content:
+                '❌ Result draft expired. Run /tryout results again.',
+              flags:
+                MessageFlags.Ephemeral
+            });
+          }
+
+          draft.type =
+            'striker';
+
+          draft.position =
+            position;
+
+          drafts.set(
+            interaction.user.id,
+            draft
+          );
+
+          return interaction.showModal(
+            strikerModal(
+              playerId,
+              getPlayerData(
+                playerId
+              ),
+              draft.notes ||
+              ''
+            )
+          );
+        }
+
+        /* ---------------- RESULT EDIT ---------------- */
+
+        if (
+          id.startsWith(
+            'result_edit:'
+          )
+        ) {
+
+          const playerId =
+            id.split(':')[1];
+
+          const draft =
+            drafts.get(
+              interaction.user.id
+            );
+
+          if (
+            !draft?.stats ||
+            draft.playerId !==
+              playerId
+          ) {
+            return interaction.reply({
+              content:
+                '❌ Result draft expired. Run /tryout results again.',
+              flags:
+                MessageFlags.Ephemeral
+            });
+          }
+
+          if (
+            draft.stats.type ===
+            'gk'
+          ) {
+            return interaction.showModal(
+              gkModal(
+                playerId,
+                draft.stats,
+                draft.notes ||
+                ''
+              )
+            );
+          }
+
+          return interaction.showModal(
+            strikerModal(
+              playerId,
+              draft.stats,
+              draft.notes ||
+              ''
+            )
+          );
+        }
+
+        /* ---------------- RESULT FINISH ---------------- */
+
+        if (
+          id.startsWith(
+            'result_finish:'
+          )
+        ) {
+
+          await interaction
+            .deferUpdate();
+
+          const playerId =
+            id.split(':')[1];
+
+          const draft =
+            drafts.get(
+              interaction.user.id
+            );
+
+          if (
+            !draft?.stats ||
+            draft.playerId !==
+              playerId
+          ) {
+            return interaction.editReply({
+
+              content:
+                '❌ Result draft not found.',
+
+              embeds: [],
+
+              components: []
+            });
+          }
+
+          const old =
+            getPlayerData(
+              playerId
+            );
+
+          const history =
+            Array.isArray(
+              old?.history
+            )
+              ? [
+                  ...old.history
+                ]
+              : [];
+
+          history.push({
+
+            ...draft.stats,
+
+            completedAt:
+              new Date()
+                .toISOString()
+          });
+
+          const bestOVR =
+            Math.max(
+              ...history.map(
+                item =>
+                  Number(
+                    item.overall
+                  ) || 0
+              ),
+
+              draft.stats.overall
+            );
+
+          resultsDatabase[
+            playerId
+          ] = {
+
+            ...draft.stats,
+
+            updatedAt:
+              new Date()
+                .toISOString(),
+
+            history,
+
+            tryoutsCompleted:
+              history.length,
+
+            bestOVR
+          };
+
+          saveResults();
+
+          const assignment =
+            await assignRank(
+              interaction,
+              playerId,
+              draft.stats.rank
+            );
+
+          drafts.delete(
+            interaction.user.id
+          );
+
+          return interaction.editReply({
+
+            content:
+
+              `✅ **Result finished for ${mentionUser(playerId)}**\n\n` +
+
+              `◇ Type: **${
+                draft.stats.type ===
+                'gk'
+                  ? 'GOALKEEPER'
+                  : 'STRIKER'
+              }**\n` +
+
+              `◇ OVR: **${draft.stats.overall}**\n` +
+
+              `◇ Rank: **${draft.stats.rank}**` +
+
+              (
+                draft.stats.type ===
+                'striker'
+                  ? `\n◇ Position: **${draft.stats.position}**`
+                  : ''
+              ) +
+
+              (
+                assignment.ok
+                  ? `\n🏷️ Rank role: **${assignment.roleName}**`
+                  : `\n⚠️ Rank role: ${assignment.reason}`
+              ),
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        /* =================================================
            SCRIM TYPE
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'scrim_type:'
           )
         ) {
+
           const [
             ,
             type,
@@ -3223,7 +3868,7 @@ client.on(
             id.split(':');
 
           const scrim =
-            getScrim(
+            scrims.get(
               messageId
             );
 
@@ -3249,19 +3894,8 @@ client.on(
           }
 
           if (
-            scrim.phase !==
-            'choose'
-          ) {
-            return interaction.reply({
-              content:
-                '❌ Type already chosen.',
-              flags:
-                MessageFlags.Ephemeral
-            });
-          }
-
-          if (
-            type === 'elo' &&
+            type ===
+              'elo' &&
             !MAIN_TEAM_ROLE_ID
           ) {
             return interaction.reply({
@@ -3272,7 +3906,8 @@ client.on(
             });
           }
 
-          await interaction.deferUpdate();
+          await interaction
+            .deferUpdate();
 
           scrim.type =
             type;
@@ -3284,22 +3919,21 @@ client.on(
             scrim
           );
 
-          await pingScrimRole(
+          return pingScrimRole(
             scrim
           );
-
-          return;
         }
 
-        /* ===================================================
+        /* =================================================
            SCRIM POSITION
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'scrim_pos:'
           )
         ) {
+
           const [
             ,
             position,
@@ -3308,7 +3942,7 @@ client.on(
             id.split(':');
 
           const scrim =
-            getScrim(
+            scrims.get(
               messageId
             );
 
@@ -3350,25 +3984,26 @@ client.on(
 
           let player =
             scrim.players.find(
-              item =>
-                item.userId ===
+              p =>
+                p.userId ===
                 interaction.user.id
             );
 
-          if (player) {
-            const duplicate =
-              scrim.players.some(
-                item =>
-                  item.userId !==
-                    interaction.user.id &&
-                  item.position ===
-                    position
-              );
+          if (
+            player
+          ) {
 
-            if (duplicate) {
+            if (
+              scrim.players.some(
+                p =>
+                  p !== player &&
+                  p.position ===
+                    position
+              )
+            ) {
               return interaction.reply({
                 content:
-                  `❌ **${position}** is already taken by another player.`,
+                  `❌ **${position}** is already taken.`,
                 flags:
                   MessageFlags.Ephemeral
               });
@@ -3376,10 +4011,12 @@ client.on(
 
             player.position =
               position;
+
           } else {
+
             if (
               scrim.players.length >=
-              SCRIM_SELECTED_PLAYERS
+              5
             ) {
               return interaction.reply({
                 content:
@@ -3389,72 +4026,66 @@ client.on(
               });
             }
 
-            const duplicate =
+            if (
               scrim.players.some(
-                item =>
-                  item.position ===
+                p =>
+                  p.position ===
                   position
-              );
-
-            if (duplicate) {
+              )
+            ) {
               return interaction.reply({
                 content:
-                  `❌ **${position}** is already taken by another player.`,
+                  `❌ **${position}** is already taken.`,
                 flags:
                   MessageFlags.Ephemeral
               });
             }
 
-            player = {
+            scrim.players.push({
               userId:
                 interaction.user.id,
 
               position
-            };
-
-            scrim.players.push(
-              player
-            );
+            });
           }
 
           if (
-            !allPositionsCovered(
+            !allPositionsFilled(
               scrim
             )
           ) {
-            stopScrimCountdown(
+            stopCountdown(
               scrim
             );
           }
 
-          await interaction.deferUpdate();
+          await interaction
+            .deferUpdate();
 
           await updateScrim(
             scrim
           );
 
-          startScrimCountdown(
+          startCountdown(
             scrim
           );
 
           return;
         }
 
-        /* ===================================================
+        /* =================================================
            SCRIM SKIP
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'scrim_skip:'
           )
         ) {
-          const messageId =
-            id.split(':')[1];
 
           const scrim =
-            getScrim(
-              messageId
+            scrims.get(
+              id.split(':')[1]
             );
 
           if (!scrim) {
@@ -3479,7 +4110,7 @@ client.on(
           }
 
           if (
-            !allPositionsCovered(
+            !allPositionsFilled(
               scrim
             )
           ) {
@@ -3503,30 +4134,27 @@ client.on(
             });
           }
 
-          await interaction.deferUpdate();
+          await interaction
+            .deferUpdate();
 
-          await startScrimRandomPick(
+          return randomPick(
             scrim
           );
-
-          return;
         }
 
-        /* ===================================================
+        /* =================================================
            SCRIM LEAVE
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'scrim_leave:'
           )
         ) {
-          const messageId =
-            id.split(':')[1];
 
           const scrim =
-            getScrim(
-              messageId
+            scrims.get(
+              id.split(':')[1]
             );
 
           if (!scrim) {
@@ -3552,8 +4180,8 @@ client.on(
 
           const index =
             scrim.players.findIndex(
-              player =>
-                player.userId ===
+              p =>
+                p.userId ===
                 interaction.user.id
             );
 
@@ -3573,33 +4201,33 @@ client.on(
             1
           );
 
-          stopScrimCountdown(
+          stopCountdown(
             scrim
           );
 
-          await interaction.deferUpdate();
+          await interaction
+            .deferUpdate();
 
-          await updateScrim(
+          return updateScrim(
             scrim
           );
-
-          return;
         }
 
-        /* ===================================================
+        /* =================================================
            SCRIM SERVER LINK
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'scrim_server:'
           )
         ) {
+
           const messageId =
             id.split(':')[1];
 
           const scrim =
-            getScrim(
+            scrims.get(
               messageId
             );
 
@@ -3625,41 +4253,45 @@ client.on(
           }
 
           return interaction.showModal(
+
             new ModalBuilder()
               .setCustomId(
-                `scrim_server_link_modal:${messageId}`
+                `scrim_server_modal:${messageId}`
               )
               .setTitle(
                 'AUREON • SCRIM SERVER LINK'
               )
               .addComponents(
-                new ActionRowBuilder().addComponents(
-                  new TextInputBuilder()
-                    .setCustomId(
-                      'scrim_server_link'
-                    )
-                    .setLabel(
-                      'Roblox Private Server Link'
-                    )
-                    .setStyle(
-                      TextInputStyle.Short
-                    )
-                    .setRequired(true)
-                    .setMaxLength(
-                      1000
-                    )
-                    .setValue(
-                      scrim.serverLink ||
+
+                new ActionRowBuilder()
+                  .addComponents(
+
+                    new TextInputBuilder()
+                      .setCustomId(
+                        'scrim_server_link'
+                      )
+                      .setLabel(
+                        'Roblox Private Server Link'
+                      )
+                      .setStyle(
+                        TextInputStyle.Short
+                      )
+                      .setRequired(true)
+                      .setMaxLength(
+                        1000
+                      )
+                      .setValue(
+                        scrim.serverLink ||
                         ''
-                    )
-                )
+                      )
+                  )
               )
           );
         }
 
-        /* ===================================================
+        /* =================================================
            SCRIM CLOSE
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
@@ -3668,21 +4300,22 @@ client.on(
         ) {
           return closeScrim(
             interaction,
-            getScrim(
+            scrims.get(
               id.split(':')[1]
             )
           );
         }
 
-        /* ===================================================
+        /* =================================================
            TRYOUT JOIN
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'tryout_join:'
           )
         ) {
+
           const lobby =
             tryouts.get(
               id.split(':')[1]
@@ -3726,24 +4359,24 @@ client.on(
             interaction.user.id
           );
 
-          await interaction.deferUpdate();
+          await interaction
+            .deferUpdate();
 
-          await updateTryout(
+          return updateTryout(
             lobby
           );
-
-          return;
         }
 
-        /* ===================================================
+        /* =================================================
            TRYOUT LEAVE
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'tryout_leave:'
           )
         ) {
+
           const lobby =
             tryouts.get(
               id.split(':')[1]
@@ -3779,24 +4412,24 @@ client.on(
             1
           );
 
-          await interaction.deferUpdate();
+          await interaction
+            .deferUpdate();
 
-          await updateTryout(
+          return updateTryout(
             lobby
           );
-
-          return;
         }
 
-        /* ===================================================
+        /* =================================================
            TRYOUT SERVER LINK
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
             'tryout_link:'
           )
         ) {
+
           const messageId =
             id.split(':')[1];
 
@@ -3827,6 +4460,7 @@ client.on(
           }
 
           return interaction.showModal(
+
             new ModalBuilder()
               .setCustomId(
                 `tryout_server_modal:${messageId}`
@@ -3835,33 +4469,36 @@ client.on(
                 'AUREON • SERVER LINK'
               )
               .addComponents(
-                new ActionRowBuilder().addComponents(
-                  new TextInputBuilder()
-                    .setCustomId(
-                      'server_link'
-                    )
-                    .setLabel(
-                      'Roblox Private Server Link'
-                    )
-                    .setStyle(
-                      TextInputStyle.Short
-                    )
-                    .setRequired(true)
-                    .setMaxLength(
-                      1000
-                    )
-                    .setValue(
-                      lobby.serverLink ||
+
+                new ActionRowBuilder()
+                  .addComponents(
+
+                    new TextInputBuilder()
+                      .setCustomId(
+                        'server_link'
+                      )
+                      .setLabel(
+                        'Roblox Private Server Link'
+                      )
+                      .setStyle(
+                        TextInputStyle.Short
+                      )
+                      .setRequired(true)
+                      .setMaxLength(
+                        1000
+                      )
+                      .setValue(
+                        lobby.serverLink ||
                         ''
-                    )
-                )
+                      )
+                  )
               )
           );
         }
 
-        /* ===================================================
+        /* =================================================
            TRYOUT CLOSE
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
@@ -3876,9 +4513,9 @@ client.on(
           );
         }
 
-        /* ===================================================
+        /* =================================================
            ANNOUNCEMENT BUTTONS
-        =================================================== */
+        ================================================= */
 
         if (
           id.startsWith(
@@ -3891,12 +4528,10 @@ client.on(
             'announcement_reping:'
           )
         ) {
-          const messageId =
-            id.split(':')[1];
 
           const announcement =
             announcements.get(
-              messageId
+              id.split(':')[1]
             );
 
           if (!announcement) {
@@ -3913,6 +4548,7 @@ client.on(
               'announcement_ready:'
             )
           ) {
+
             if (
               !announcement.ready.includes(
                 interaction.user.id
@@ -3924,11 +4560,13 @@ client.on(
                 interaction.user.id
               );
             }
+
           } else if (
             id.startsWith(
               'announcement_notready:'
             )
           ) {
+
             const index =
               announcement.ready.indexOf(
                 interaction.user.id
@@ -3942,11 +4580,14 @@ client.on(
                 1
               );
             }
+
           } else if (
             TRYOUT_PING_ROLE_ID
           ) {
+
             await interaction.channel
               .send({
+
                 content:
                   mentionRole(
                     TRYOUT_PING_ROLE_ID
@@ -3963,236 +4604,31 @@ client.on(
               );
           }
 
-          await interaction.deferUpdate();
+          await interaction
+            .deferUpdate();
 
-          await updateAnnouncement(
+          return updateAnnounce(
             announcement
           );
-
-          return;
-        }
-
-        /* ===================================================
-           RESULT EDIT
-        =================================================== */
-
-        if (
-          id.startsWith(
-            'result_edit:'
-          )
-        ) {
-          const playerId =
-            id.split(':')[1];
-
-          const existing =
-            getPlayerData(
-              playerId
-            );
-
-          const draft =
-            drafts.get(
-              interaction.user.id
-            );
-
-          if (
-            draft?.playerId ===
-              playerId &&
-            draft.stats
-          ) {
-            return interaction.showModal(
-              resultModal(
-                playerId,
-                draft.stats
-              )
-            );
-          }
-
-          return interaction.showModal(
-            resultModal(
-              playerId,
-              existing
-            )
-          );
-        }
-
-        /* ===================================================
-           RESULT NOTES
-        =================================================== */
-
-        if (
-          id.startsWith(
-            'result_notes_button:'
-          )
-        ) {
-          const playerId =
-            id.split(':')[1];
-
-          const draft =
-            drafts.get(
-              interaction.user.id
-            );
-
-          const existing =
-            getPlayerData(
-              playerId
-            );
-
-          const notes =
-            draft?.playerId ===
-              playerId
-              ? draft.notes ||
-                draft.stats
-                  ?.thingsToFix ||
-                ''
-              : existing?.thingsToFix ||
-                '';
-
-          return interaction.showModal(
-            resultNotesModal(
-              playerId,
-              notes
-            )
-          );
-        }
-
-        /* ===================================================
-           RESULT FINISH
-        =================================================== */
-
-        if (
-          id.startsWith(
-            'result_finish:'
-          )
-        ) {
-          await interaction.deferUpdate();
-
-          const playerId =
-            id.split(':')[1];
-
-          const draft =
-            drafts.get(
-              interaction.user.id
-            );
-
-          if (
-            !draft?.stats ||
-            draft.playerId !==
-              playerId
-          ) {
-            return interaction.editReply({
-              content:
-                '❌ Result draft not found. Start /tryout results again.',
-              embeds: [],
-              components: []
-            });
-          }
-
-          const old =
-            getPlayerData(
-              playerId
-            );
-
-          const history =
-            Array.isArray(
-              old?.history
-            )
-              ? [
-                  ...old.history
-                ]
-              : [];
-
-          history.push({
-            ...draft.stats,
-
-            completedAt:
-              new Date().toISOString()
-          });
-
-          const bestOVR =
-            Math.max(
-              ...history.map(
-                entry =>
-                  Number(
-                    entry.overall
-                  ) || 0
-              )
-            );
-
-          resultsDatabase[
-            playerId
-          ] = {
-            ...draft.stats,
-
-            updatedAt:
-              new Date().toISOString(),
-
-            history,
-
-            tryoutsCompleted:
-              history.length,
-
-            bestOVR
-          };
-
-          saveResults();
-
-          const assignment =
-            await assignRank(
-              interaction,
-              playerId,
-              draft.stats.rank
-            );
-
-          drafts.delete(
-            interaction.user.id
-          );
-
-          return interaction.editReply({
-            content:
-              `✅ **Result finished for ${mentionUser(playerId)}**\n\n` +
-
-              `◇ OVR: **${draft.stats.overall}**\n` +
-
-              `◇ Rank: **${draft.stats.rank}**\n` +
-
-              `◇ Defending: **${draft.stats.defending}**\n` +
-
-              `◇ GK: **${
-                draft.stats.gk === null
-                  ? 'OUT / NOT TESTED'
-                  : draft.stats.gk
-              }**` +
-
-              (
-                assignment.ok
-                  ? `\n🏷️ Rank role: **${assignment.roleName}**`
-                  : `\n⚠️ Rank role: ${assignment.reason}`
-              ),
-
-            embeds: [],
-
-            components: []
-          });
         }
       }
 
     } catch (error) {
+
       console.error(
         '❌ Interaction error:',
         error
       );
 
-      /*
-         Unknown interaction (10062) means
-         Discord already expired the interaction.
-      */
       if (
-        error?.code === 10062
+        error?.code ===
+        10062
       ) {
         return;
       }
 
       try {
+
         if (
           interaction.isRepliable() &&
           !interaction.replied &&
@@ -4206,6 +4642,7 @@ client.on(
               MessageFlags.Ephemeral
           });
         }
+
       } catch {}
     }
   }
@@ -4218,6 +4655,7 @@ client.on(
 client.on(
   'messageDelete',
   message => {
+
     if (
       tryouts.has(
         message.id
@@ -4233,12 +4671,13 @@ client.on(
         message.id
       )
     ) {
+
       const scrim =
         scrims.get(
           message.id
         );
 
-      stopScrimCountdown(
+      stopCountdown(
         scrim
       );
 
@@ -4260,6 +4699,7 @@ client.on(
         message.id
       )
     ) {
+
       const announcement =
         announcements.get(
           message.id
@@ -4289,8 +4729,13 @@ client.on(
 client.once(
   'ready',
   () => {
+
     console.log(
       `✅ Logged in as ${client.user.tag}`
+    );
+
+    console.log(
+      `🧩 Build: ${BUILD_VERSION}`
     );
 
     console.log(
@@ -4314,19 +4759,15 @@ client.once(
     );
 
     console.log(
-      '🛡️ Defending: ENABLED'
+      '⚽ Striker results: Shooting • Passing • Teamwork • Defending'
     );
 
     console.log(
-      '🧤 GK: OPTIONAL / EXCLUDED WHEN BLANK'
+      '🧤 GK results: Goalkeeping • Reaction Time • Passing • Defending'
     );
 
     console.log(
       '⏭️ Scrim SKIP: ENABLED'
-    );
-
-    console.log(
-      '🎲 Scrim random selection: ENABLED'
     );
 
     updatePresence();
@@ -4353,6 +4794,7 @@ client.login(
   TOKEN
 ).catch(
   error => {
+
     console.error(
       '❌ Discord login failed:',
       error
