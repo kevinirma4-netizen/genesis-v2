@@ -49,14 +49,14 @@ const GUILD_ID =
         );
 
 /* =========================================================
-   TOKEN / CLIENT CHECK
+   VALIDATION
 ========================================================= */
 
 if (
     !TOKEN
 ) {
     console.error(
-        '❌ TOKEN is missing from .env / Environment Variables.'
+        '❌ TOKEN is missing.'
     );
 
     process.exit(1);
@@ -66,7 +66,17 @@ if (
     !CLIENT_ID
 ) {
     console.error(
-        '❌ CLIENT_ID is missing from .env / Environment Variables.'
+        '❌ CLIENT_ID is missing.'
+    );
+
+    process.exit(1);
+}
+
+if (
+    !GUILD_ID
+) {
+    console.error(
+        '❌ GUILD_ID is missing.'
     );
 
     process.exit(1);
@@ -76,12 +86,7 @@ if (
    COMMANDS
 ========================================================= */
 
-const commands = [
-
-    /* =====================================================
-       /tryout
-    ===================================================== */
-
+const tryoutCommand =
     new SlashCommandBuilder()
         .setName(
             'tryout'
@@ -90,9 +95,9 @@ const commands = [
             'AUREON tryout commands'
         )
 
-        /* -------------------------------------------------
+        /* ================================================
            /tryout create
-        ------------------------------------------------- */
+        ================================================ */
 
         .addSubcommand(
             sub =>
@@ -105,9 +110,9 @@ const commands = [
                     )
         )
 
-        /* -------------------------------------------------
+        /* ================================================
            /tryout close
-        ------------------------------------------------- */
+        ================================================ */
 
         .addSubcommand(
             sub =>
@@ -120,24 +125,9 @@ const commands = [
                     )
         )
 
-        /* -------------------------------------------------
-           /tryout scrim
-        ------------------------------------------------- */
-
-        .addSubcommand(
-            sub =>
-                sub
-                    .setName(
-                        'scrim'
-                    )
-                    .setDescription(
-                        'Create a scrim'
-                    )
-        )
-
-        /* -------------------------------------------------
+        /* ================================================
            /tryout results
-        ------------------------------------------------- */
+        ================================================ */
 
         .addSubcommand(
             sub =>
@@ -150,9 +140,9 @@ const commands = [
                     )
         )
 
-        /* -------------------------------------------------
+        /* ================================================
            /tryout leaderboard
-        ------------------------------------------------- */
+        ================================================ */
 
         .addSubcommand(
             sub =>
@@ -165,9 +155,9 @@ const commands = [
                     )
         )
 
-        /* -------------------------------------------------
+        /* ================================================
            /tryout profile
-        ------------------------------------------------- */
+        ================================================ */
 
         .addSubcommand(
             sub =>
@@ -193,9 +183,9 @@ const commands = [
                     )
         )
 
-        /* -------------------------------------------------
+        /* ================================================
            /tryout announce
-        ------------------------------------------------- */
+        ================================================ */
 
         .addSubcommand(
             sub =>
@@ -249,12 +239,28 @@ const commands = [
                                     1
                                 )
                     )
-        ),
+        )
 
-    /* =====================================================
-       /scrim
-    ===================================================== */
+        /* ================================================
+           /tryout scrim
+        ================================================ */
 
+        .addSubcommand(
+            sub =>
+                sub
+                    .setName(
+                        'scrim'
+                    )
+                    .setDescription(
+                        'Create a scrim'
+                    )
+        );
+
+/* =========================================================
+   /scrim
+========================================================= */
+
+const scrimCommand =
     new SlashCommandBuilder()
         .setName(
             'scrim'
@@ -263,9 +269,9 @@ const commands = [
             'AUREON scrim commands'
         )
 
-        /* -------------------------------------------------
+        /* ================================================
            /scrim close
-        ------------------------------------------------- */
+        ================================================ */
 
         .addSubcommand(
             sub =>
@@ -276,7 +282,15 @@ const commands = [
                     .setDescription(
                         'Close your active scrim'
                     )
-        )
+        );
+
+/* =========================================================
+   FINAL COMMAND LIST
+========================================================= */
+
+const commands = [
+    tryoutCommand,
+    scrimCommand
 ];
 
 /* =========================================================
@@ -302,144 +316,142 @@ const rest =
             '======================================'
         );
         console.log(
-            '🚀 AUREON COMMAND DEPLOY'
+            '⏳ Registering AUREON commands...'
         );
         console.log(
             '======================================'
         );
 
         console.log(
-            `📦 Commands prepared: ${commands.length}`
+            `🤖 Client ID: ${CLIENT_ID}`
         );
 
-        commands.forEach(
-            command => {
-                console.log(
-                    `   • /${command.name}`
-                );
-            }
+        console.log(
+            `🏠 Guild ID: ${GUILD_ID}`
         );
 
         console.log('');
         console.log(
-            '🔄 Sending commands to Discord...'
+            '⚡ Commands being registered:'
         );
 
-        let data;
+        console.log(
+            '   /tryout'
+        );
 
-        /*
-         * GUILD DEPLOY
-         *
-         * Much faster when GUILD_ID exists.
-         */
-        if (
-            GUILD_ID
-        ) {
-            console.log(
-                `🏠 Deploying to guild: ${GUILD_ID}`
-            );
+        console.log(
+            '      └─ create'
+        );
 
-            data =
-                await rest.put(
-                    Routes.applicationGuildCommands(
-                        CLIENT_ID,
-                        GUILD_ID
-                    ),
-                    {
-                        body:
-                            commands.map(
-                                command =>
-                                    command.toJSON()
-                            )
-                    }
-                );
+        console.log(
+            '      └─ close'
+        );
 
-            console.log('');
-            console.log(
-                `✅ Successfully deployed ${data.length} guild commands.`
-            );
+        console.log(
+            '      └─ results'
+        );
 
-            console.log(
-                '⚡ Guild commands should update almost immediately.'
-            );
-        } else {
-            /*
-             * GLOBAL DEPLOY
-             */
-            console.log(
-                '🌍 No GUILD_ID found → using GLOBAL commands.'
-            );
+        console.log(
+            '      └─ leaderboard'
+        );
 
-            data =
-                await rest.put(
-                    Routes.applicationCommands(
-                        CLIENT_ID
-                    ),
-                    {
-                        body:
-                            commands.map(
-                                command =>
-                                    command.toJSON()
-                            )
-                    }
-                );
+        console.log(
+            '      └─ profile'
+        );
 
-            console.log('');
-            console.log(
-                `✅ Successfully deployed ${data.length} global commands.`
-            );
+        console.log(
+            '      └─ announce'
+        );
 
-            console.log(
-                '⚠️ Global commands can take longer to appear.'
-            );
-        }
+        console.log(
+            '      └─ scrim'
+        );
 
         console.log('');
+
+        console.log(
+            '   /scrim'
+        );
+
+        console.log(
+            '      └─ close'
+        );
+
+        console.log('');
+
+        const data =
+            await rest.put(
+                Routes.applicationGuildCommands(
+                    CLIENT_ID,
+                    GUILD_ID
+                ),
+                {
+                    body:
+                        commands.map(
+                            command =>
+                                command.toJSON()
+                        )
+                }
+            );
+
         console.log(
             '======================================'
         );
+
         console.log(
-            '✅ DEPLOY FINISHED'
+            '✅ AUREON COMMANDS REGISTERED'
         );
+
         console.log(
             '======================================'
         );
 
         console.log('');
+
         console.log(
-            'Available commands:'
+            '⚡ Available commands:'
         );
 
         console.log(
-            '• /tryout create'
+            '   /tryout create'
         );
 
         console.log(
-            '• /tryout close'
+            '   /tryout close'
         );
 
         console.log(
-            '• /tryout scrim'
+            '   /tryout results'
         );
 
         console.log(
-            '• /tryout results'
+            '   /tryout leaderboard'
         );
 
         console.log(
-            '• /tryout leaderboard'
+            '   /tryout profile'
         );
 
         console.log(
-            '• /tryout profile'
+            '   /tryout announce'
         );
 
         console.log(
-            '• /tryout announce'
+            '   /tryout scrim'
         );
 
         console.log(
-            '• /scrim close'
+            '   /scrim close'
+        );
+
+        console.log('');
+
+        console.log(
+            `✅ ${data.length} top-level commands registered.`
+        );
+
+        console.log(
+            '✅ /scrim close IS NOW REGISTERED.'
         );
 
         console.log('');
@@ -451,7 +463,7 @@ const rest =
             '======================================'
         );
         console.error(
-            '❌ DEPLOY FAILED'
+            '❌ AUREON COMMAND DEPLOY FAILED'
         );
         console.error(
             '======================================'
@@ -479,9 +491,6 @@ const rest =
         );
 
         console.error('');
-        console.error(
-            error
-        );
 
         process.exit(1);
     }
