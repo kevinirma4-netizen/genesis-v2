@@ -88,10 +88,8 @@ function isDirectUsableBannerUrl(
             new URL(url);
 
         if (
-            parsed.protocol !==
-                'http:' &&
-            parsed.protocol !==
-                'https:'
+            parsed.protocol !== 'http:' &&
+            parsed.protocol !== 'https:'
         ) {
             return false;
         }
@@ -2325,6 +2323,10 @@ function resultPreviewButtons(
     ];
 }
 
+/* =========================================================
+   LEADERBOARD
+========================================================= */
+
 function buildLeaderboardEmbed() {
     const players =
         Object.entries(
@@ -2392,6 +2394,10 @@ function buildLeaderboardEmbed() {
         });
 }
 
+/* =========================================================
+   PROFILE
+========================================================= */
+
 function buildProfileEmbed(
     playerId
 ) {
@@ -2426,6 +2432,10 @@ function buildProfileEmbed(
             `🛠️ Things to fix:\n${data.thingsToFix || 'None'}`
         );
 }
+
+/* =========================================================
+   ANNOUNCEMENT MODAL
+========================================================= */
 
 function announcementModal() {
     return new ModalBuilder()
@@ -2680,125 +2690,7 @@ client.on(
     async interaction => {
         try {
             /* =====================================================
-               TOP LEVEL /scrim COMMAND
-            ===================================================== */
-
-            if (
-                interaction.isChatInputCommand() &&
-                interaction.commandName ===
-                    'scrim'
-            ) {
-                const subcommand =
-                    interaction.options.getSubcommand();
-
-                /* =================================================
-                   /scrim close
-                ================================================= */
-
-                if (
-                    subcommand ===
-                    'close'
-                ) {
-                    if (
-                        !isTryoutHoster(
-                            interaction.member
-                        )
-                    ) {
-                        return interaction.reply({
-                            content:
-                                '❌ You must be a **Tryout Hoster** to close a scrim.',
-                            flags:
-                                MessageFlags.Ephemeral
-                        });
-                    }
-
-                    const found =
-                        [
-                            ...scrims.entries()
-                        ].find(
-                            ([, scrim]) =>
-                                scrim.hostId ===
-                                interaction.user.id
-                        );
-
-                    if (
-                        !found
-                    ) {
-                        return interaction.reply({
-                            content:
-                                '❌ You do not have an active scrim.',
-                            flags:
-                                MessageFlags.Ephemeral
-                        });
-                    }
-
-                    await interaction.deferReply({
-                        flags:
-                            MessageFlags.Ephemeral
-                    });
-
-                    const [
-                        messageId,
-                        scrim
-                    ] =
-                        found;
-
-                    /*
-                     * DELETE FROM ACTIVE MAP FIRST.
-                     * This lets the host instantly create another scrim.
-                     */
-                    scrims.delete(
-                        messageId
-                    );
-
-                    updatePresence();
-
-                    try {
-                        const channel =
-                            await client.channels.fetch(
-                                scrim.channelId
-                            );
-
-                        if (
-                            channel?.isTextBased()
-                        ) {
-                            const message =
-                                await channel.messages.fetch(
-                                    messageId
-                                ).catch(
-                                    () =>
-                                        null
-                                );
-
-                            if (
-                                message
-                            ) {
-                                await message.delete()
-                                    .catch(
-                                        () => {}
-                                    );
-                            }
-                        }
-                    } catch (
-                        error
-                    ) {
-                        console.log(
-                            '⚠️ Could not delete scrim message:',
-                            error.message
-                        );
-                    }
-
-                    return interaction.editReply({
-                        content:
-                            '❌ Scrim closed successfully.'
-                    });
-                }
-
-                return;
-            }
-
-            /* =====================================================
-               /tryout COMMANDS
+               /TRYOUT COMMANDS
             ===================================================== */
 
             if (
@@ -2806,194 +2698,303 @@ client.on(
                 interaction.commandName ===
                     'tryout'
             ) {
+                const subcommandGroup =
+                    interaction.options.getSubcommandGroup();
+
                 const subcommand =
                     interaction.options.getSubcommand();
 
                 /* =================================================
-                   TRYOUT SCRIM
+                   /tryout scrim create
                 ================================================= */
 
                 if (
-                    subcommand ===
+                    subcommandGroup ===
                     'scrim'
                 ) {
-                    if (
-                        !isTryoutHoster(
-                            interaction.member
-                        )
-                    ) {
-                        return interaction.reply({
-                            content:
-                                '❌ You must be a **Tryout Hoster** to create a scrim.',
-                            flags:
-                                MessageFlags.Ephemeral
-                        });
-                    }
-
-                    const existingTryout =
-                        [
-                            ...tryouts.values()
-                        ].find(
-                            lobby =>
-                                lobby.hostId ===
-                                interaction.user.id
-                        );
+                    /* =============================================
+                       /tryout scrim create
+                    ============================================= */
 
                     if (
-                        existingTryout
+                        subcommand ===
+                        'create'
                     ) {
-                        return interaction.reply({
-                            content:
-                                '❌ You already have an active tryout lobby.',
-                            flags:
-                                MessageFlags.Ephemeral
-                        });
-                    }
-
-                    const existingScrim =
-                        [
-                            ...scrims.values()
-                        ].find(
-                            scrim =>
-                                scrim.hostId ===
-                                interaction.user.id
-                        );
-
-                    if (
-                        existingScrim
-                    ) {
-                        return interaction.reply({
-                            content:
-                                '❌ You already have an active scrim.',
-                            flags:
-                                MessageFlags.Ephemeral
-                        });
-                    }
-
-                    const scrim = {
-                        hostId:
-                            interaction.user.id,
-
-                        guildId:
-                            interaction.guildId,
-
-                        channelId:
-                            interaction.channelId,
-
-                        messageId:
-                            null,
-
-                        type:
-                            null,
-
-                        phase:
-                            'choose',
-
-                        players:
-                            [],
-
-                        selected:
-                            [],
-
-                        serverLink:
-                            null,
-
-                        countdownEndTime:
-                            null,
-
-                        picking:
-                            false
-                    };
-
-                    /*
-                     * IMMEDIATE INTERACTION ACK.
-                     * The GUI itself is the interaction response.
-                     */
-                    await interaction.reply({
-                        embeds: [
-                            scrimChooseEmbed(
-                                scrim
+                        if (
+                            !isTryoutHoster(
+                                interaction.member
                             )
-                        ],
-
-                        components: [
-                            new ActionRowBuilder()
-                                .addComponents(
-                                    new ButtonBuilder()
-                                        .setCustomId(
-                                            'scrim_type:friendly'
-                                        )
-                                        .setLabel(
-                                            'FRIENDLY'
-                                        )
-                                        .setEmoji(
-                                            '🟢'
-                                        )
-                                        .setStyle(
-                                            ButtonStyle.Success
-                                        ),
-
-                                    new ButtonBuilder()
-                                        .setCustomId(
-                                            'scrim_type:elo'
-                                        )
-                                        .setLabel(
-                                            'ELO'
-                                        )
-                                        .setEmoji(
-                                            '🔴'
-                                        )
-                                        .setStyle(
-                                            ButtonStyle.Danger
-                                        ),
-
-                                    new ButtonBuilder()
-                                        .setCustomId(
-                                            'scrim_close:pending'
-                                        )
-                                        .setLabel(
-                                            'CLOSE'
-                                        )
-                                        .setEmoji(
-                                            '❌'
-                                        )
-                                        .setStyle(
-                                            ButtonStyle.Secondary
-                                        )
-                                )
-                        ],
-
-                        allowedMentions: {
-                            parse:
-                                []
+                        ) {
+                            return interaction.reply({
+                                content:
+                                    '❌ You must be a **Tryout Hoster** to create a scrim.',
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
                         }
-                    });
 
-                    const message =
-                        await interaction.fetchReply();
+                        const existingTryout =
+                            [
+                                ...tryouts.values()
+                            ].find(
+                                lobby =>
+                                    lobby.hostId ===
+                                    interaction.user.id
+                            );
 
-                    scrim.messageId =
-                        message.id;
+                        if (
+                            existingTryout
+                        ) {
+                            return interaction.reply({
+                                content:
+                                    '❌ You already have an active tryout lobby.',
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
+                        }
 
-                    scrims.set(
-                        message.id,
-                        scrim
-                    );
+                        const existingScrim =
+                            [
+                                ...scrims.values()
+                            ].find(
+                                scrim =>
+                                    scrim.hostId ===
+                                    interaction.user.id
+                            );
 
-                    await message.edit({
-                        embeds: [
-                            scrimChooseEmbed(
-                                scrim
+                        if (
+                            existingScrim
+                        ) {
+                            return interaction.reply({
+                                content:
+                                    '❌ You already have an active scrim.',
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
+                        }
+
+                        const scrim = {
+                            hostId:
+                                interaction.user.id,
+
+                            guildId:
+                                interaction.guildId,
+
+                            channelId:
+                                interaction.channelId,
+
+                            messageId:
+                                null,
+
+                            type:
+                                null,
+
+                            phase:
+                                'choose',
+
+                            players:
+                                [],
+
+                            selected:
+                                [],
+
+                            serverLink:
+                                null,
+
+                            countdownEndTime:
+                                null,
+
+                            picking:
+                                false
+                        };
+
+                        await interaction.reply({
+                            embeds: [
+                                scrimChooseEmbed(
+                                    scrim
+                                )
+                            ],
+
+                            components: [
+                                new ActionRowBuilder()
+                                    .addComponents(
+                                        new ButtonBuilder()
+                                            .setCustomId(
+                                                'scrim_type:friendly'
+                                            )
+                                            .setLabel(
+                                                'FRIENDLY'
+                                            )
+                                            .setEmoji(
+                                                '🟢'
+                                            )
+                                            .setStyle(
+                                                ButtonStyle.Success
+                                            ),
+
+                                        new ButtonBuilder()
+                                            .setCustomId(
+                                                'scrim_type:elo'
+                                            )
+                                            .setLabel(
+                                                'ELO'
+                                            )
+                                            .setEmoji(
+                                                '🔴'
+                                            )
+                                            .setStyle(
+                                                ButtonStyle.Danger
+                                            ),
+
+                                        new ButtonBuilder()
+                                            .setCustomId(
+                                                'scrim_close:pending'
+                                            )
+                                            .setLabel(
+                                                'CLOSE'
+                                            )
+                                            .setEmoji(
+                                                '❌'
+                                            )
+                                            .setStyle(
+                                                ButtonStyle.Secondary
+                                            )
+                                    )
+                            ],
+
+                            allowedMentions: {
+                                parse:
+                                    []
+                            }
+                        });
+
+                        const message =
+                            await interaction.fetchReply();
+
+                        scrim.messageId =
+                            message.id;
+
+                        scrims.set(
+                            message.id,
+                            scrim
+                        );
+
+                        await message.edit({
+                            embeds: [
+                                scrimChooseEmbed(
+                                    scrim
+                                )
+                            ],
+
+                            components:
+                                buildScrimTypeButtons(
+                                    scrim
+                                )
+                        });
+
+                        updatePresence();
+
+                        return;
+                    }
+
+                    /* =============================================
+                       /tryout scrim close
+                    ============================================= */
+
+                    if (
+                        subcommand ===
+                        'close'
+                    ) {
+                        if (
+                            !isTryoutHoster(
+                                interaction.member
                             )
-                        ],
+                        ) {
+                            return interaction.reply({
+                                content:
+                                    '❌ You must be a **Tryout Hoster** to close a scrim.',
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
+                        }
 
-                        components:
-                            buildScrimTypeButtons(
-                                scrim
-                            )
-                    });
+                        const found =
+                            [
+                                ...scrims.entries()
+                            ].find(
+                                ([, scrim]) =>
+                                    scrim.hostId ===
+                                    interaction.user.id
+                            );
 
-                    updatePresence();
+                        if (
+                            !found
+                        ) {
+                            return interaction.reply({
+                                content:
+                                    '❌ You do not have an active scrim.',
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
+                        }
+
+                        await interaction.deferReply({
+                            flags:
+                                MessageFlags.Ephemeral
+                        });
+
+                        const [
+                            messageId,
+                            scrim
+                        ] =
+                            found;
+
+                        scrims.delete(
+                            messageId
+                        );
+
+                        updatePresence();
+
+                        try {
+                            const channel =
+                                await client.channels.fetch(
+                                    scrim.channelId
+                                );
+
+                            if (
+                                channel?.isTextBased()
+                            ) {
+                                const message =
+                                    await channel.messages.fetch(
+                                        messageId
+                                    ).catch(
+                                        () =>
+                                            null
+                                    );
+
+                                if (
+                                    message
+                                ) {
+                                    await message.delete()
+                                        .catch(
+                                            () => {}
+                                        );
+                                }
+                            }
+                        } catch (
+                            error
+                        ) {
+                            console.log(
+                                '⚠️ Could not delete scrim message:',
+                                error.message
+                            );
+                        }
+
+                        return interaction.editReply({
+                            content:
+                                '❌ Scrim closed successfully.'
+                        });
+                    }
 
                     return;
                 }
@@ -3042,12 +3043,16 @@ client.on(
                     const lobby = {
                         hostId:
                             interaction.user.id,
+
                         channelId:
                             interaction.channelId,
+
                         messageId:
                             null,
+
                         players:
                             [],
+
                         serverLink:
                             null
                     };
@@ -3058,8 +3063,10 @@ client.on(
                                 lobby
                             )
                         ],
+
                         components:
                             tryoutButtons(),
+
                         allowedMentions: {
                             parse:
                                 []
@@ -3070,14 +3077,13 @@ client.on(
                         TRYOUT_PING_ROLE_ID
                     ) {
                         payload.content =
-                            `<@&${TRYOUT_PING_ROLE_ID>}`;
+                            `<@&${TRYOUT_PING_ROLE_ID}>`;
 
-                        payload.allowedMentions =
-                            {
-                                roles: [
-                                    TRYOUT_PING_ROLE_ID
-                                ]
-                            };
+                        payload.allowedMentions = {
+                            roles: [
+                                TRYOUT_PING_ROLE_ID
+                            ]
+                        };
                     }
 
                     const message =
@@ -3472,6 +3478,10 @@ client.on(
             if (
                 interaction.isModalSubmit()
             ) {
+                /* =================================================
+                   SCRIM SERVER LINK
+                ================================================= */
+
                 if (
                     interaction.customId.startsWith(
                         'scrim_server_link_modal:'
@@ -3545,6 +3555,10 @@ client.on(
                     });
                 }
 
+                /* =================================================
+                   ANNOUNCEMENT MODAL
+                ================================================= */
+
                 if (
                     interaction.customId ===
                     'tryout_announce_modal'
@@ -3580,32 +3594,46 @@ client.on(
                     const announcement = {
                         hostId:
                             interaction.user.id,
+
                         guildId:
                             pending.guildId,
+
                         channelId:
                             pending.channelId,
+
                         messageId:
                             null,
+
                         unit:
                             pending.unit,
+
                         amount:
                             pending.amount,
+
                         customMessage,
+
                         ready:
                             [],
+
                         phase:
                             'initial',
+
                         createdAt:
                             Date.now(),
+
                         endTime:
                             Date.now() +
                             pending.duration,
+
                         extensionEndTime:
                             null,
+
                         warningSent:
                             false,
+
                         repingUsed:
                             false,
+
                         closed:
                             false
                     };
@@ -3657,6 +3685,10 @@ client.on(
 
                     return;
                 }
+
+                /* =================================================
+                   RESULT STATS
+                ================================================= */
 
                 if (
                     interaction.customId.startsWith(
@@ -3816,6 +3848,10 @@ client.on(
                             )
                     });
                 }
+
+                /* =================================================
+                   TRYOUT SERVER LINK
+                ================================================= */
 
                 if (
                     interaction.customId ===
@@ -4383,12 +4419,7 @@ client.on(
                             () => {}
                         );
 
-                    return interaction.reply({
-                        content:
-                            '❌ Scrim closed.',
-                        flags:
-                            MessageFlags.Ephemeral
-                    });
+                    return;
                 }
 
                 /* =================================================
@@ -4628,7 +4659,7 @@ client.on(
                 }
 
                 /* =================================================
-                   TRYOUT CLOSE
+                   TRYOUT CLOSE BUTTON
                 ================================================= */
 
                 if (
@@ -5024,19 +5055,26 @@ client.on(
                     history.push({
                         shooting:
                             stats.shooting,
+
                         passing:
                             stats.passing,
+
                         teamwork:
                             stats.teamwork,
+
                         gk:
                             stats.gk,
+
                         overall:
                             stats.overall,
+
                         rank:
                             stats.rank,
+
                         thingsToFix:
                             stats.thingsToFix ||
                             '',
+
                         completedAt:
                             new Date().toISOString()
                     });
@@ -5056,24 +5094,34 @@ client.on(
                     ] = {
                         shooting:
                             stats.shooting,
+
                         passing:
                             stats.passing,
+
                         teamwork:
                             stats.teamwork,
+
                         gk:
                             stats.gk,
+
                         overall:
                             stats.overall,
+
                         rank:
                             stats.rank,
+
                         thingsToFix:
                             stats.thingsToFix ||
                             '',
+
                         updatedAt:
                             new Date().toISOString(),
+
                         history,
+
                         tryoutsCompleted:
                             history.length,
+
                         bestOVR
                     };
 
@@ -5102,6 +5150,7 @@ client.on(
                         await interaction.channel.send({
                             content:
                                 `<@${playerId}>`,
+
                             embeds: [
                                 resultEmbed(
                                     player.user,
@@ -5109,6 +5158,7 @@ client.on(
                                     false
                                 )
                             ],
+
                             allowedMentions: {
                                 users: [
                                     playerId
@@ -5133,7 +5183,9 @@ client.on(
                                     ? `\n🏷️ Rank role: **${assignment.roleName}**`
                                     : `\n⚠️ Rank role not assigned: ${assignment.reason}`
                             ),
+
                         embeds: [],
+
                         components: []
                     });
                 }
